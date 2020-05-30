@@ -25,7 +25,7 @@ int main(int argc, char** argv)
 	vector<vector<Point2i>> numOfPoints;
 
 	/*********Variable Initialization****************/
-	k = 10;
+	k = 20;
 	labelImages.reserve(NUMOFCLASSES);
 	labelNames.reserve(NUMOFCLASSES);
 	numOfPoints.reserve(NUMOFCLASSES);

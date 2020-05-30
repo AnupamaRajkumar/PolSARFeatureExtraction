@@ -993,7 +993,6 @@ void Data::ExtractImagePoints(int numOfSamples, Mat& RGBImg, vector<Point2i>& sa
 	{
 		int x = distrX(eng);
 		int y = distrY(eng);
-		///t << "x" << x << "," <<"y" << endl;
 		Point2i newSample(x, y);
 		samples.push_back(newSample);
 		samplesDrawn += 1;
