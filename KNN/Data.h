@@ -1,5 +1,9 @@
 #pragma once
 
+/*defining compiler versions for some 
+compiler specific includes*/
+#define VC			//GCC
+
 #ifndef DATA_H
 #define DATA_H
 
