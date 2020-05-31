@@ -2,7 +2,14 @@
 
 #include <iostream>
 #include <fstream>
+#ifdef VC
 #include <filesystem>
+#endif // VC
+
+#ifdef GCC
+#include <dirent.h>
+#endif
+
 #include <random>
 
 
@@ -782,6 +789,8 @@ Function to read labels from label directory
 Author: Anupama Rajkumar
 Date: 23.05.2020
 ***************************************************************/
+#ifdef VC
+
 void ReadClassLabels(string labelPath, vector<string> &labelNames, vector<Mat> &labelImages){
 fs::recursive_directory_iterator iter(labelPath);
 fs::recursive_directory_iterator end;
@@ -805,6 +814,46 @@ fs::recursive_directory_iterator end;
 		}
 	}
 }
+
+#endif // VC
+
+
+#ifdef GCC
+
+void ReadClassLabels(string labelPath, vector<string> &labelNames, vector<Mat> &labelImages) {
+	struct dirent *entry;
+	DIR *dir = opendir(labelPath.c_str());
+
+	if (dir == NULL)
+		return;
+
+	std::size_t current = 0;
+	int i = 0;
+	while ((entry = readdir(dir)) != NULL)
+	{
+		if (strlen(entry->d_name) < 10)
+			continue; // Ignore current folder (.) and parent folder (..)
+
+		labelNames.push_back(entry->d_name);
+		string filename = labelPath + labelNames[i];
+		Mat_<float> img = imread(filename, IMREAD_GRAYSCALE);
+		if (!img.data)
+		{
+			cout << "ERROR: file " << filename << " not found" << endl;
+			cout << "Press enter to exit" << endl;
+			cin.get();
+			exit(-3);
+		}
+		// convert to floating point precision
+		img.convertTo(img, CV_32FC1);
+		labelImages.push_back(img);
+		cout << "Loaded image " << labelNames[i] << endl;
+		i++;
+	}
+	closedir(dir);
+}
+
+#endif //GCC
 
 /**************************************************************
 Function to load labels
@@ -841,6 +890,8 @@ Author: Anupama Rajkumar
 Date: 23.05.2020
 ***************************************************************/
 
+#ifdef VC
+
 void Data::loadData(string folderPath) {
 	vector<string> fnames;
 	fnames.reserve(5);
@@ -857,6 +908,8 @@ void Data::loadData(string folderPath) {
 	}
 	this->loadPolSARData(fnames);
 }
+
+#endif	//VC
 
 
 /***********************************************************************
@@ -993,7 +1046,6 @@ void Data::ExtractImagePoints(int numOfSamples, Mat& RGBImg, vector<Point2i>& sa
 	{
 		int x = distrX(eng);
 		int y = distrY(eng);
-		///t << "x" << x << "," <<"y" << endl;
 		Point2i newSample(x, y);
 		samples.push_back(newSample);
 		samplesDrawn += 1;
