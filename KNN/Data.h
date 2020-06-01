@@ -2,7 +2,8 @@
 
 /*defining compiler versions for some 
 compiler specific includes*/
-#define VC			//GCC
+#define VC				//GCC/VC
+
 
 #ifndef DATA_H
 #define DATA_H

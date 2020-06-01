@@ -5,12 +5,13 @@
 #include <math.h>
 #include <fstream>
 #include <opencv2/opencv.hpp>
+#include <opencv2/ml.hpp>
 
 using namespace std;
 using namespace cv;
 
 /***********************************************************************
-Calculationg euclidean distance between image and label map points
+Calculating euclidean distance between image and label map points
 Author : Anupama Rajkumar
 Date : 27.05.2020
 Description: This function is used to calculate the Euclidean distance 
@@ -45,49 +46,102 @@ void WriteToFile(Mat& labelMap, string& fileName) {
 }
 
 /***********************************************************************
+A helper function containing color metadata to be used when visualizing
+Author : Anupama Rajkumar
+Date : 27.05.2020
+Description: Using this function creates a map of the colors and the labels
+they correspond to. To be used with visualization
+*************************************************************************/
+map<string, Vec3f> loadLabelsMetadata()
+{
+	map<string, Vec3f> name_color;
+
+	// Color is BGR not RGB!
+	Vec3f red = Vec3f(49.0f, 60.0f, 224.0f);
+	Vec3f blue = Vec3f(164.0f, 85.0f, 50.0f);
+	Vec3f yellow = Vec3f(0.0f, 190.0f, 246.0f);
+	Vec3f dark_green = Vec3f(66.0f, 121.0f, 79.0f);
+	Vec3f light_green = Vec3f(0.0f, 189.0f, 181.0f);
+	Vec3f black = Vec3f(0.0f, 0.0f, 0.0f);
+
+	name_color["city"] = red;
+	name_color["field"] = yellow;
+	name_color["forest"] = dark_green;
+	name_color["grassland"] = light_green;
+	name_color["street"] = blue;
+	name_color["unclassified"] = black;
+
+	return name_color;
+}
+/***********************************************************************
 A helper function to visualize the maps (label or classified)
 Author : Anupama Rajkumar
 Date : 27.05.2020
 Description: Using this function to create visualizations by reading the stored
 csv files
-Work TBD : Incomplete function. Still working
 *************************************************************************/
-void Visualization(Mat& labelMap) {
-	Mat dispLabelMap = labelMap.clone();
-	dispLabelMap.rows = labelMap.rows;
-	dispLabelMap.cols = labelMap.cols;
-	int val;
-	for (int row = 0; row < dispLabelMap.rows; row++) {
-		for (int col = 0; col < dispLabelMap.cols; col++) {						//labelMap.cols
-			val = dispLabelMap.at<float>(row, col);								//labelMap.at<float>(row, col);
+Mat_<Vec3f> visualise_labels(Mat &image)
+{
+	map<string, Vec3f> colors = loadLabelsMetadata();
+	//cout << colors["city"];
+
+	Mat result = Mat(image.rows, image.cols, CV_32FC3, Scalar(255.0f, 255.0f, 255.0f));		
+	// Create the output result;
+	for (int row = 0; row < image.rows; row++) {
+		for (int col = 0; col < image.cols; col++) {
+			Vec3f color;
+			// Take every point and assign the right color in the result Mat
+			int val = image.at<float>(row, col);								
 			switch (val) {
 			case 0:
-				dispLabelMap.at<float>(row, col) = 0.;						    //unclassified - black
+				color = colors["unclassified"];						   
 				break;
 			case 1:
-				dispLabelMap.at<float>(row, col) = 10.;							//Vec3i(0, 0, 128) : city - brown
+				color = colors["city"];
 				break;
 			case 2:
-				dispLabelMap.at<float>(row, col) = 55.;							//Vec3i(0, 128, 255) : field - Orange
+				color = colors["field"];
 				break;
 			case 3:
-				dispLabelMap.at<float>(row, col) = 125.;						//Vec3i(0, 255, 0) forest - green
+				color = colors["forest"];						
 				break;
 			case 4:
-				dispLabelMap.at<float>(row, col) = 180.;						//Vec3i(255, 0, 255) grassland - magenta
+				color = colors["grassland"];
 				break;
 			case 5:
-				dispLabelMap.at<float>(row, col) = 200.;						//Vec3i(0, 255, 255) street - yellow
+				color = colors["street"];						
 				break;
 			default:
 				cout << "Wrong value" << endl;
 				break;
 			}
-			//cout << "col:" << col << endl;
+			result.at<Vec3f>(row, col) = color;
 		}
-		//cout << "row:" << row << endl;
 	}
-	cv::imwrite("LabelMap.png", dispLabelMap);
+	imwrite("labels_vis.png", result);
+
+	return result;
+}
+
+void Visualization(string& fileName, string& imageName, Size size) {
+
+	cv::Mat img;
+	//reading data from csv
+	cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(fileName, 0, -1, -1);
+	cv::Mat data = raw_data->getSamples();
+	// optional if you have a color image and not just raw data
+	data.convertTo(img, CV_32FC1);
+	img = img.reshape(3); //set number of channels
+	// set the image type
+	img.convertTo(img, CV_32FC3);
+	// set the image size
+	cv::resize(img, img, size);
+
+	//cv::imwrite("LabelMap.png", img);
+	//cv::namedWindow("img");
+	//cv::imshow("img", img);
+	visualise_labels(img);
+	cv::waitKey(0);
 }
 
 /***********************************************************************
@@ -115,23 +169,18 @@ void generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat& labelM
 			for (int col = 0; col < cols; col++) {
 				if (label[cnt].at<float>(row, col) > 0.) {
 					labelMap.at<float>(row, col) = cnt + 1;		    //class of label
-				}
-				else if (labelMap.at<float>(row, col) != 0) {
-					//do nothing
-				}
-				else {
-					labelMap.at<float>(row, col) = 0;
-				}					
+				}				
 			}
 		}
 	}
 
 	//write the contents of label map in a csv, for visualization
-	string fileName = "distance_list.csv";
+	string fileName = "img_classified.csv";			//"distance_list.csv";
 	WriteToFile(labelMap, fileName);
-
+	
 	//visualizing the label map
-	//Visualization(labelMap);
+	string imageName = "LabelMap.png";
+	Visualization(fileName, imageName, labelMap.size());
 }
 
 /***********************************************************************
@@ -352,24 +401,31 @@ from which the nearest neighbour needs to be found in the labelMap
 *************************************************************************/
 
 void GetLabelPatchIndex(int sizeOfPatch, Point2i samplePoints, Mat& LabelMap, int& pStart_r, int& pStart_c, int& pEnd_r, int& pEnd_c) {
-	pStart_r = samplePoints.x - sizeOfPatch / 2;
-	pStart_c = samplePoints.y - sizeOfPatch / 2;
-
-	pEnd_r = samplePoints.x + sizeOfPatch / 2;
-	pEnd_c = samplePoints.y + sizeOfPatch / 2;
-
-	if (pStart_r < 0 || pStart_c < 0 )
-	{
-		pStart_r = samplePoints.x;
-		pStart_c = samplePoints.y;
-		pEnd_r = samplePoints.x + sizeOfPatch;
-		pEnd_c = samplePoints.y + sizeOfPatch;
+	/*Ensure that the patch size is even*/
+	if ((sizeOfPatch % 2) != 0) {
+		cout << "Please ensure that the patch size is even. Changing patch dimension to next lower even number" << endl;
+		sizeOfPatch = -1;
 	}
-	if (pEnd_r > LabelMap.rows || pEnd_c > LabelMap.cols) {
-		pStart_r = samplePoints.x - sizeOfPatch;
-		pStart_c = samplePoints.y - sizeOfPatch;
-		pEnd_r	 = samplePoints.x;
-		pEnd_c   = samplePoints.y;
+	int rowStart, rowEnd, colStart, colEnd;
+	pStart_r = samplePoints.x - (sizeOfPatch / 2.);
+	pStart_c = samplePoints.y - (sizeOfPatch / 2.);
+
+	pEnd_r = samplePoints.x + (sizeOfPatch / 2.);
+	pEnd_c = samplePoints.y + (sizeOfPatch / 2.);
+
+	if ((pStart_r < 0) || (pStart_c < 0))
+	{
+		pStart_r = 0;
+		pStart_c = 0;
+		pEnd_r = sizeOfPatch;
+		pEnd_c = sizeOfPatch;
+	}
+	if ((pEnd_r > LabelMap.rows) || (pEnd_c > LabelMap.cols))
+	{
+		pEnd_r = LabelMap.rows-1;
+		pEnd_c = LabelMap.cols-1;
+		pStart_r = LabelMap.rows - 1 - sizeOfPatch;
+		pStart_c = LabelMap.cols - 1 - sizeOfPatch;
 	}
 }
 
@@ -399,7 +455,8 @@ void DisplayClassName(int finalClass) {
 	default:
 		cout << finalClass << endl;
 		cout << "Something went wrong..can't be classified" << endl;
-		break;	}
+		break;	
+	}
 
 }
 
@@ -423,8 +480,8 @@ void KNNTrain(Mat& RGBImg, Mat& LabelMap, int k) {
 	classMap = Mat::zeros(LabelMap.size(), CV_32FC1);
 	//image patch start and end hardcoded now - will be made configurable
 	//for each row and column in the patch
-	for (int row = 5656; row < 6500; row++) {													
-		for (int col = 950; col < 1300; col++) {												
+	for (int row = 0; row < RGBImg.rows; row++) {	
+		for (int col = 0; col < RGBImg.cols; col++) {												
 			Point2i imgPoint;
 			imgPoint.x = row;
 			imgPoint.y = col;			
@@ -439,7 +496,7 @@ void KNNTrain(Mat& RGBImg, Mat& LabelMap, int k) {
 					dist.first  = Euclidean(row, col, i, j);
 					dist.second = LabelMap.at<float>(i, j);
 					distVec.push_back(dist);
-				}
+ 				}
 				//sort the distance in the ascending order
 				sort(distVec.begin(), distVec.end());
 				//classify for each row the label patch
@@ -476,7 +533,7 @@ void KNN::KNNClassifier(vector<Mat>& label, vector<string>& labelName, int k, Ma
 	generateLabelMap(label, labelName, labelMap);
 
 	//Training the Image 
-	KNNTrain(RGBImg, labelMap, k);
+	//KNNTrain(RGBImg, labelMap, k);
 
 	//get n random samples from RGBImg
 #if 0
