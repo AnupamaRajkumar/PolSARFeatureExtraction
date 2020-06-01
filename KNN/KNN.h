@@ -10,14 +10,16 @@ using namespace cv;
 
 class KNN {
 public:
-	/*vector<Mat> label : labels (training data)
-	  int cnt : number of label classes
-	  int k   : number of k nearest neighbor
-	  Mat label: RGB image*/
+
 	void KNNClassifier(vector<Mat>& label, vector<string>& labelName, int k, Mat& RGBImg);
+	void KNNTest(vector<Point2i>& samplesImg, vector<Point2i>& samplesLab, Mat& RGBImg, Mat& LabelMap, int k);
+	void KNNTrain(Mat& RGBImg, Mat& LabelMap, int k);
+	double Euclidean(int imgX, int imgY, int labX, int labY);
+	void generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat& labelMap);
+	int Classify(vector<pair<double, int>>& distVec, int k);
+	int Classify(vector<int> classResult);
 
 private:
-	//vector<vector<pair<double, string>>> distance;
 	vector<Mat> distance;
 };
 
