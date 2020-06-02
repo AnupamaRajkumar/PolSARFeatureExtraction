@@ -18,6 +18,7 @@ public:
 	void generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat& labelMap);
 	int Classify(vector<pair<double, int>>& distVec, int k);
 	int Classify(vector<int> classResult);
+	void VisualizationImages(Size size);
 
 private:
 	vector<Mat> distance;

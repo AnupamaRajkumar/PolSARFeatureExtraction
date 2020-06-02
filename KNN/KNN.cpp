@@ -53,20 +53,18 @@ void KNN::generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat& l
 	for (int cnt = 0; cnt < NUMOFCLASSES; cnt++) {
 		for (int row = 0; row < rows; row++) {
 			for (int col = 0; col < cols; col++) {
-				if (label[cnt].at<float>(row, col) > 0.) {
-					labelMap.at<float>(row, col) = cnt + 1;		    //class of label
-				}				
+				if (labelMap.at<float>(row, col) == 0) {
+					if (label[cnt].at<float>(row, col) > 0.) {
+						labelMap.at<float>(row, col) = cnt + 1;		    //class of label
+					}
+				}			
 			}
 		}
 	}
 
 	//write the contents of label map in a csv, for visualization
-	string fileName = "distance_list.csv";			
+	string fileName = "distance_list.csv";		
 	utils.WriteToFile(labelMap, fileName);
-	
-	//visualizing the label map
-	string imageName = "LabelMap.png";
-	utils.Visualization(fileName, imageName, labelMap.size());
 }
 
 /***********************************************************************
@@ -296,11 +294,11 @@ void KNN::KNNTrain(Mat& RGBImg, Mat& LabelMap, int k) {
 	int pStart_r, pStart_c, pEnd_r, pEnd_c;
 	pStart_r = pStart_c = pEnd_r = pEnd_c = 0;
 	Mat classMap;
-	classMap = Mat::zeros(LabelMap.size(), CV_32FC1);
+	classMap = Mat::zeros(LabelMap.size(), CV_32FC3);
 	//image patch start and end hardcoded now - will be made configurable
 	//for each row and column in the patch
-	for (int row = 1100; row < 1160; row++) {	
-		for (int col = 1200; col < 1250; col++) {												
+	for (int row = 1100; row < 1300; row++) {	
+		for (int col = 1200; col < LabelMap.cols; col++) {												
 			Point2i imgPoint;
 			imgPoint.x = row;
 			imgPoint.y = col;			
@@ -319,12 +317,12 @@ void KNN::KNNTrain(Mat& RGBImg, Mat& LabelMap, int k) {
 				//sort the distance in the ascending order
 				sort(distVec.begin(), distVec.end());
 				//classify for each row the label patch
-				int classVal = Classify(distVec, k);
+				int classVal = this->Classify(distVec, k);
 				classResult.push_back(classVal);
 			}
 			//from a vector of probable classes within k nearest neighbor
 			//find the class with highest possibility of occurance
-			int finalClass = Classify(classResult);
+			int finalClass = this->Classify(classResult);
 			classMap.at<float>(row, col) = finalClass;
 			cout << "Point is " << row << "x" << col << ":";
 			utils.DisplayClassName(finalClass);			
@@ -333,9 +331,6 @@ void KNN::KNNTrain(Mat& RGBImg, Mat& LabelMap, int k) {
 	//write the contents of class map in a csv, for visualization
 	string fileName = "img_classified.csv";
 	utils.WriteToFile(classMap, fileName);	
-	//visualizing the label map
-	string imageName = "ClassifiedMap.png";
-	utils.Visualization(fileName, imageName, LabelMap.size());
 	cout << "Image training ended!!!" << endl;
 }
 
@@ -349,14 +344,15 @@ Work TBD: write a function such that user can either classify a single point
 or a patch of RGB image as is happening in KNNTrain
 *************************************************************************/
 void KNN::KNNClassifier(vector<Mat>& label, vector<string>& labelName, int k, Mat& RGBImg) {
-	RGBImg.convertTo(RGBImg, CV_32FC1);
+	RGBImg.convertTo(RGBImg, CV_32FC3);
 	cv::imwrite("ModifiedRGB.png", RGBImg);
-	Mat labelMap = Mat::zeros(RGBImg.size(), CV_32FC1);
-	generateLabelMap(label, labelName, labelMap);
-
+	Mat labelMap = Mat::zeros(RGBImg.size(), CV_32FC3);
+	this->generateLabelMap(label, labelName, labelMap);
 
 	//Training the Image 
-	KNNTrain(RGBImg, labelMap, k);
+	this->KNNTrain(RGBImg, labelMap, k);
+
+	this->VisualizationImages(labelMap.size());
 
 	//get n random samples from RGBImg
 #if 0
@@ -377,4 +373,20 @@ void KNN::KNNClassifier(vector<Mat>& label, vector<string>& labelName, int k, Ma
 	//Pass the random samples for classification using KNN
 	KNNTest(samplesImg, samplesLabel, RGBImg, labelMap, k);
 #endif
+}
+
+void KNN::VisualizationImages(Size size) {	
+
+	cout << "Starting visualization..." << endl;
+	//visualizing the label map
+	string fileName1 = "distance_list.csv";
+	string imageName1 = "LabelMap.png";
+	utils.Visualization(fileName1, imageName1, size);
+
+	//visualizing the classified map
+	string fileName2 = "img_classified.csv";
+	string imageName2 = "ClassifiedMap.png";
+	utils.Visualization(fileName2, imageName2, size);
+
+	cout << "Visualization complete!!!" << endl;
 }
