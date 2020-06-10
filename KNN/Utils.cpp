@@ -121,7 +121,7 @@ void Utils::Visualization(string& fileName, string& imageName, Size size) {
 	cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(fileName, 0, -1, -1);
 	cv::Mat data = raw_data->getSamples();
 	// optional if you have a color image and not just raw data
-	data.convertTo(img, CV_32FC3);
+	data.convertTo(img, CV_32FC1);
 	// set the image size
 	cv::resize(img, img, size);
 	//visualize the map

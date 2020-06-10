@@ -28,6 +28,63 @@ double KNN::Euclidean(int imgX, int imgY, int labX, int labY) {
 	return distance;
 }
 
+void generateTestLabel(vector<Mat>& label, vector<string>& labelName, Mat& labelMap, int cnt) {
+	/**********************************
+Oberpfaffenhofen
+0 : Unclassified
+1 : city
+2 : field
+3 : forest
+4 : grassland
+5 : street
+***********************************/
+	cout << labelName[cnt] << endl;
+	for (int row = 0; row < label[cnt].rows; row++) {
+		for (int col = 0; col < label[cnt].cols; col++) {
+			if (labelMap.at<float>(row, col) == 0.0f) {
+				if (label[cnt].at<float>(row, col) > 0.0f) {
+					labelMap.at<float>(row, col) = cnt+1;		    //class of label
+				}
+			}
+		}
+	}
+	string fileName, imageName;
+	switch (cnt) {
+		case 0:
+			fileName = "city.csv";
+			utils.WriteToFile(labelMap, fileName);
+			imageName = "city.png";
+			utils.Visualization(fileName, imageName, labelMap.size());
+			break;
+		case 1:
+			fileName = "field.csv";
+			utils.WriteToFile(labelMap, fileName);
+			imageName = "field.png";
+			utils.Visualization(fileName, imageName, labelMap.size());
+			break;
+		case 2:
+			fileName = "forest.csv";
+			utils.WriteToFile(labelMap, fileName);
+			imageName = "forest.png";
+			utils.Visualization(fileName, imageName, labelMap.size());
+			break;
+		case 3:
+			fileName = "grassland.csv";
+			utils.WriteToFile(labelMap, fileName);
+			imageName = "grassland.png";
+			utils.Visualization(fileName, imageName, labelMap.size());
+			break;
+		case 4:
+			fileName = "streets.csv";
+			utils.WriteToFile(labelMap, fileName);
+			imageName = "streets.png";
+			utils.Visualization(fileName, imageName, labelMap.size());
+			break;
+		default:
+			break;
+	}
+	
+}
 
 /***********************************************************************
 Generating a label map 
@@ -50,11 +107,11 @@ void KNN::generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat& l
 	***********************************/
 	int rows = label[0].rows;
 	int cols = label[0].cols;
-	for (int cnt = 0; cnt < NUMOFCLASSES; cnt++) {
-		for (int row = 0; row < rows; row++) {
-			for (int col = 0; col < cols; col++) {
-				if (labelMap.at<float>(row, col) == 0) {
-					if (label[cnt].at<float>(row, col) > 0.) {
+	for (int cnt = 0; cnt < NUMOFCLASSES; cnt++) {;
+		for (int row = 0; row < label[cnt].rows; row++) {
+			for (int col = 0; col < label[cnt].cols; col++) {
+				if (labelMap.at<float>(row, col) == 0.0f) {
+					if (label[cnt].at<float>(row, col) > 0.0f) {
 						labelMap.at<float>(row, col) = cnt + 1;		    //class of label
 					}
 				}			
@@ -344,13 +401,18 @@ Work TBD: write a function such that user can either classify a single point
 or a patch of RGB image as is happening in KNNTrain
 *************************************************************************/
 void KNN::KNNClassifier(vector<Mat>& label, vector<string>& labelName, int k, Mat& RGBImg) {
-	RGBImg.convertTo(RGBImg, CV_32FC3);
+	RGBImg.convertTo(RGBImg, CV_32FC1);
 	cv::imwrite("ModifiedRGB.png", RGBImg);
-	Mat labelMap = Mat::zeros(RGBImg.size(), CV_32FC3);
+	//cout << RGBImg.rows << " " << RGBImg.cols << " " << RGBImg.type() << " " << RGBImg.channels() << endl;
+	Mat labelMap = Mat::zeros(RGBImg.size(), CV_32FC1);	
 	this->generateLabelMap(label, labelName, labelMap);
+	/*for (int cnt = 0; cnt < NUMOFCLASSES; cnt++) {
+		Mat labelMap = Mat::zeros(RGBImg.size(), CV_32FC1);
+		generateTestLabel(label, labelName, labelMap, cnt);
+	}*/
 
 	//Training the Image 
-	this->KNNTrain(RGBImg, labelMap, k);
+	//this->KNNTrain(RGBImg, labelMap, k);
 
 	this->VisualizationImages(labelMap.size());
 

@@ -804,7 +804,12 @@ fs::recursive_directory_iterator end;
 			cin.get();
 			exit(0);
 		}
+		//cout << "Before" << endl;
+		//cout << img.rows << " " << img.cols << " " << img.type() << " " << img.channels() << endl;
 		img.convertTo(img, CV_32FC1);
+		cvtColor(img, img, CV_BGR2GRAY);
+		//cout << "After" << endl;
+		//cout << img.rows << " " << img.cols << " " << img.type() << " " << img.channels() << endl;
 		labelImages.push_back(img);
 
 		error_code ec;
