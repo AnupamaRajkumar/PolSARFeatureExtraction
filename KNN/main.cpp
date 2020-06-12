@@ -25,6 +25,10 @@ void DivideTrainTestData(vector<Point2i>& testSamples,
 						 int numberOfTrainSamples, int numberOfTestSamples,
 						 Data& data);
 
+
+int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, int cnt);
+
+
 int main(int argc, char** argv)
 {
 	cout << "In main!!" << endl;
@@ -32,6 +36,7 @@ int main(int argc, char** argv)
 	int k;
 	int numberOfTrainSamples;
 	int numberOfTestSamples;
+	bool train;
 	//Object of class
 	Data data;
 	KNN knn;
@@ -39,9 +44,9 @@ int main(int argc, char** argv)
 	Utils utils;
 
 	/*********Variable Initialization****************/
-	k = 20;
-	numberOfTrainSamples = 20000;
-	numberOfTestSamples = 4000;
+	k = 5;
+	numberOfTrainSamples = 20;
+	numberOfTestSamples = 5;
 
 	/*********Function calls****************/
 	//load PolSAR data
@@ -54,22 +59,32 @@ int main(int argc, char** argv)
 	data.loadLabels(argv[3], data.labelImages, data.labelNames, data.numOfPoints);
 	cout << "Labels loaded" << endl;
 
+	
 	//Splitting training and testing data for classification
 	vector<Point2i> testSamples;
 	DivideTrainTestData(testSamples, numberOfTrainSamples, numberOfTestSamples, data);
 
 	cout << "Training samples:" << data.trainSamples.Samples.size() << endl;
-	cout << "Training samples:" << data.trainSamples.labelName.size() << endl;
-	cout << "Testing samples:" << testSamples.size() << endl;
+	cout << "Training Labels:" << data.trainSamples.labelName.size() << endl;
+	cout << "Testing samples:" << data.testSamples.Samples.size() << endl;
+	cout << "Testing Labels:" << data.testSamples.labelName.size() << endl;
 
-	/*Computing texture feature extractor*/
-	vector<Mat> texture;
-	vector<vector<string>> textureLabels;
-	feature.GetTextureFeature(texture, textureLabels, data);
-
-	//KNN classifier
-	//knn.KNNClassifier(data.labelImages, data.labelNames, k, RGBImg);
 	
+	/*Computing texture feature extractor*/
+	vector<Mat> trainTexture;
+	vector<string> trainTextLabels;
+	train = true;
+	feature.GetTextureFeature(trainTexture, trainTextLabels, data, train);
+
+	/*texture is the training data as it has all the values and labels
+	 test data needs to be classified*/
+	vector<Mat> testTexture;
+	vector<string> testTextLabel;
+	train = false;
+	feature.GetTextureFeature(testTexture, testTextLabel, data, train);
+
+	knn.KNNTest(trainTexture, trainTextLabels, testTexture, testTextLabel, k);
+
 	waitKey(0);
 	return 0;	
 }
@@ -95,30 +110,58 @@ void DivideTrainTestData(vector<Point2i>& testSamples,
 	reserved for testing data set and from remaining area training samples are taken*/
 	int samplesPerClass = int(numberOfTrainSamples / NUMOFCLASSES);
 	/*for each class*/
-	for (int cnt = 0; cnt < data.numOfPoints.size(); cnt++) {
+	for (int cnt = 0; cnt < data.numOfPoints.size(); cnt++) {										
 		trainCnt = 0;
 		testCnt = 0;
 		/*for each point in each class*/
 		for (int pt = 0; pt < data.numOfPoints[cnt].size(); pt++) {
+			vector<Point2i> pts;
 			if (data.numOfPoints[cnt][pt].y > training_start_idx) {
 				//cout << pt << trainCnt << endl;
 				/*Ensure that the number of points is less than the max points*/
 				if (trainCnt < samplesPerClass) {
-					data.trainSamples.Samples.push_back(data.numOfPoints[cnt][pt]);
-					data.trainSamples.labelName.push_back(data.labelNames[cnt]);
-					trainCnt++;
+					int val = getSafeSamplePoints(data.numOfPoints[cnt][pt], data, samplesPerClass, cnt);
+					if (val == 1) {
+						data.trainSamples.Samples.push_back(data.numOfPoints[cnt][pt]);
+						data.trainSamples.labelName.push_back(data.labelNames[cnt]);
+						trainCnt++;
+					}
 				}
 			}
 			else
 			{
 				if (testCnt < numberOfTestSamples) {
-					testSamples.push_back(data.numOfPoints[cnt][pt]);
-					testCnt++;
+					int val = getSafeSamplePoints(data.numOfPoints[cnt][pt], data, samplesPerClass, cnt);
+					if (val == 1) {
+						data.testSamples.Samples.push_back(data.numOfPoints[cnt][pt]);
+						data.testSamples.labelName.push_back(data.labelNames[cnt]);
+						testCnt++;
+					}
 				}				
 			}
 		}
 	}
-
 }
+
+
+int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, int cnt) {
+
+	Point2i new_ind;
+	int j_min = samplePoint.x - int(data.sizeOfPatch / 2); 
+	int j_max = samplePoint.x + int(data.sizeOfPatch / 2);
+	int i_min = samplePoint.y - int(data.sizeOfPatch / 2);
+	int i_max = samplePoint.y + int(data.sizeOfPatch / 2);
+	// get rid of the points on the borders
+	if (i_max < data.labelImages[cnt].cols && j_max < data.labelImages[cnt].rows && i_min >= 0 && j_min >= 0) {
+		// get rid of points which are half patch size away from the mask zero area
+			return 1;				
+	}
+	else {
+		return 0;
+	}
+}
+
+
+
 
 

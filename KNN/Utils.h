@@ -16,6 +16,9 @@ class Utils {
 		void Visualization(string& fileName, string& imageName, Size size);
 		void GetLabelPatchIndex(int sizeOfPatch, Point2i samplePoints, Mat& LabelMap, int& pStart_r, int& pStart_c, int& pEnd_r, int& pEnd_c);
 		void DisplayClassName(int finalClass);
+		void VisualizationImages(Size size);
+		void generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat& labelMap);
+		void generateTestLabel(vector<Mat>& label, vector<string>& labelName, Mat& labelMap, int cnt);
 
 };
 #endif

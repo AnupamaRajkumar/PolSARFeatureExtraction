@@ -41,6 +41,7 @@ public:
 	// data = scattering vector with values [HH, VV, HV]
 	std::vector<cv::Mat> data;
 	unsigned border = 3;
+	int sizeOfPatch = 10;
 	vector<Mat> labelImages;
 	vector<string> labelNames;
 	vector<vector<Point2i>> numOfPoints;
@@ -51,6 +52,7 @@ public:
 	} trainTestData;
 
 	trainTestData trainSamples;
+	trainTestData testSamples;
 
 	/***********Variables***************/
 

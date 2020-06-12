@@ -85,21 +85,28 @@ Mat Feature::logTransform(const Mat& in) {
 Author  : Jun Xiang with modifications by Anupama Rajkumar
 Date	: 11.06.2020
 ****************************************************************/
-void Feature::GetTextureFeature(vector<Mat>& features, vector<vector<string>>& classValue, Data data) {
+void Feature::GetTextureFeature(vector<Mat>& features, vector<string>& classValue, Data data, bool flag) {
 
 	Utils utils;
 	int cnt = 0;
 	cout << "Starting to calculate texture features......" << endl;
 	int pStart_r, pStart_c, pEnd_r, pEnd_c;
-		for (const auto& p : data.trainSamples.Samples) {
-			cnt++;
-			Point2i imgPoint;
-			imgPoint.x = p.x;
-			imgPoint.y = p.y;
-			pStart_r = pStart_c = pEnd_r = pEnd_c = 0;
-			utils.GetLabelPatchIndex(sizeOfPatch, imgPoint, data.labelImages[0], pStart_r, pStart_c, pEnd_r, pEnd_c);
-			Rect roi = Rect(pStart_r, pStart_c, sizeOfPatch, sizeOfPatch);
-
+	vector <Point2i> samples;
+	if (flag == true) {
+		samples = data.trainSamples.Samples;
+	}
+	else {
+		samples = data.testSamples.Samples;
+	}
+ 
+	for (const auto& p : samples) {
+		
+		pStart_r = int(p.x) - data.sizeOfPatch / 2;
+		pStart_c = int(p.y) - data.sizeOfPatch / 2;
+		Rect roi = Rect(pStart_c, pStart_r, data.sizeOfPatch, data.sizeOfPatch);
+		
+		if (roi.x >= 0 && roi.y >= 0 && roi.width + roi.x < data.labelImages[0].cols && roi.height + roi.y < data.labelImages[0].rows) {
+			
 			vector<Mat> temp;
 			// intensity of HH channel
 			Mat hh = logTransform(getComplexAmpl(data.data[0](roi)));
@@ -111,18 +118,31 @@ void Feature::GetTextureFeature(vector<Mat>& features, vector<vector<string>>& c
 			temp.push_back(hh);
 			temp.push_back(vv);
 			temp.push_back(hv);
-
 			Mat result;
 			for (const auto& t : temp) {
 				hconcat(cvFeatures::GetGLCM(t, 8, GrayLevel::GRAY_8, 32), cvFeatures::GetLBP(t, 1, 8, 32), result);
 				features.push_back(result);
-				classValue.push_back(data.trainSamples.labelName);
+				if (flag == true) {
+					classValue.push_back(data.trainSamples.labelName[cnt]);
+				}
+				else {
+					classValue.push_back(data.testSamples.labelName[cnt]);
+				}
+				
 			}
-			if (cnt%1000 == 0) {
-				cout << cnt + 1 << "samples converted out of" << data.trainSamples.Samples.size() << endl;
+			cnt++;
+			if ((cnt + 1) % 1000 == 0) {
+				cout << cnt << "samples converted out of" << data.trainSamples.Samples.size() << endl;
 			}
 		}
-		cout << "Texture feature calculation over!!!" << endl;;
+		else {
+			cout << "roi.x, roi.y, roi.width + roi.x, roi.height + roi.y: " << roi.x << " " << roi.y << " " << roi.width + roi.x << " " <<roi.height + roi.y <<  endl;
+			cout << "rows x cols: " << data.labelImages[0].rows << "x" << data.labelImages[0].cols;
+			cerr << "Roi index is not ok for " << p.x << " and " << p.y;
+			exit(-1);
+		}
+	}
+	cout << "Texture feature calculation over!!!" << endl;;
 }
 
 

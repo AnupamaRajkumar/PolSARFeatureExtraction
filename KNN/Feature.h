@@ -16,11 +16,11 @@ public:
 
 
 	/************Variables******************/
-	int sizeOfPatch = 64;
+	//int sizeOfPatch = 10;
 	/************Variables******************/
 
 	void lexi2pauli(vector<Mat>& lexi, vector<Mat>& pauli);
-	void GetTextureFeature(vector<Mat>& features, vector<vector<string>>& classValue, Data data);
+	void GetTextureFeature(vector<Mat>& features, vector<string>& classValue, Data data, bool flag);
 	Mat logTransform(const Mat& in);  //intensity in dB
 	Mat getComplexAmpl(const Mat& in);
 };

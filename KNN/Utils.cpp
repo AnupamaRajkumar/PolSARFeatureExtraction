@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include "Data.h"
 
 #include <iostream>
 #include <fstream>
@@ -196,4 +197,133 @@ void Utils::DisplayClassName(int finalClass) {
 		break;
 	}
 
+}
+
+
+/***********************************************************************
+Generating a individual label map
+Author : Anupama Rajkumar
+Date : 27.05.2020
+Description: Generating csv and visualisation of individual labels
+*************************************************************************/
+
+
+void Utils::generateTestLabel(vector<Mat>& label, vector<string>& labelName, Mat& labelMap, int cnt) {
+	/**********************************
+Oberpfaffenhofen
+0 : Unclassified
+1 : city
+2 : field
+3 : forest
+4 : grassland
+5 : street
+***********************************/
+	cout << labelName[cnt] << endl;
+	for (int row = 0; row < label[cnt].rows; row++) {
+		for (int col = 0; col < label[cnt].cols; col++) {
+			if (labelMap.at<float>(row, col) == 0.0f) {
+				if (label[cnt].at<float>(row, col) > 0.0f) {
+					labelMap.at<float>(row, col) = cnt + 1;		    //class of label
+				}
+			}
+		}
+	}
+	string fileName, imageName;
+	switch (cnt) {
+	case 0:
+		fileName = "city.csv";
+		this->WriteToFile(labelMap, fileName);		
+		imageName = "city.png";
+		this->Visualization(fileName, imageName, labelMap.size());
+		break;
+	case 1:
+		fileName = "field.csv";
+		this->WriteToFile(labelMap, fileName);
+		imageName = "field.png";
+		this->Visualization(fileName, imageName, labelMap.size());
+		break;
+	case 2:
+		fileName = "forest.csv";
+		this->WriteToFile(labelMap, fileName);
+		imageName = "forest.png";
+		this->Visualization(fileName, imageName, labelMap.size());
+		break;
+	case 3:
+		fileName = "grassland.csv";
+		this->WriteToFile(labelMap, fileName);
+		imageName = "grassland.png";
+		this->Visualization(fileName, imageName, labelMap.size());
+		break;
+	case 4:
+		fileName = "streets.csv";
+		this->WriteToFile(labelMap, fileName);
+		imageName = "streets.png";
+		this->Visualization(fileName, imageName, labelMap.size());
+		break;
+	default:
+		break;
+	}
+}
+
+/***********************************************************************
+Generating a label map
+Author : Anupama Rajkumar
+Date : 27.05.2020
+Description: Idea is to create a single label map from a list of various
+label classes. This map serves as points of reference when trying to classify
+patches
+*************************************************************************/
+
+void Utils::generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat& labelMap) {
+	/**********************************
+	Oberpfaffenhofen
+	0 : Unclassified
+	1 : city
+	2 : field
+	3 : forest
+	4 : grassland
+	5 : street
+	***********************************/
+	int rows = label[0].rows;
+	int cols = label[0].cols;
+	for (int cnt = 0; cnt < NUMOFCLASSES; cnt++) {
+		;
+		for (int row = 0; row < label[cnt].rows; row++) {
+			for (int col = 0; col < label[cnt].cols; col++) {
+				if (labelMap.at<float>(row, col) == 0.0f) {
+					if (label[cnt].at<float>(row, col) > 0.0f) {
+						labelMap.at<float>(row, col) = cnt + 1;		    //class of label
+					}
+				}
+			}
+		}
+	}
+
+	//write the contents of label map in a csv, for visualization
+	string fileName = "distance_list.csv";
+	this->WriteToFile(labelMap, fileName);
+}
+
+/***********************************************************************
+Visualising the images 
+Author : Anupama Rajkumar
+Date : 27.05.2020
+Description: This function generates the visualisation with the csv as 
+input
+*************************************************************************/
+
+void Utils::VisualizationImages(Size size) {
+
+	cout << "Starting visualization..." << endl;
+	//visualizing the label map
+	string fileName1 = "distance_list.csv";
+	string imageName1 = "LabelMap.png";
+	this->Visualization(fileName1, imageName1, size);
+
+	//visualizing the classified map
+	string fileName2 = "img_classified.csv";
+	string imageName2 = "ClassifiedMap.png";
+	this->Visualization(fileName1, imageName2, size);
+
+	cout << "Visualization complete!!!" << endl;
 }
