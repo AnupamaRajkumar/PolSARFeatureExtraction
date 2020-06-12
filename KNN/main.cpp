@@ -21,8 +21,8 @@ using namespace cv;
 
 
 
-void DivideTrainTestData(vector<Point2i>& testSamples,
-						 int numberOfTrainSamples, int numberOfTestSamples,
+void DivideTrainTestData(int numberOfTrainSamples, 
+						 int numberOfTestSamples,
 						 Data& data);
 
 
@@ -61,8 +61,7 @@ int main(int argc, char** argv)
 
 	
 	//Splitting training and testing data for classification
-	vector<Point2i> testSamples;
-	DivideTrainTestData(testSamples, numberOfTrainSamples, numberOfTestSamples, data);
+	DivideTrainTestData(numberOfTrainSamples, numberOfTestSamples, data);
 
 	cout << "Training samples:" << data.trainSamples.Samples.size() << endl;
 	cout << "Training Labels:" << data.trainSamples.labelName.size() << endl;
@@ -98,8 +97,8 @@ test samples
 Date: 11.06.2020
 Author: Anupama Rajkumar
 *************************************************************/
-void DivideTrainTestData(vector<Point2i>& testSamples,
-						 int numberOfTrainSamples, int numberOfTestSamples,
+void DivideTrainTestData(int numberOfTrainSamples, 
+						 int numberOfTestSamples,
 						 Data& data) {
 	int training_start_idx = int(data.labelImages[0].cols / 5);
 
