@@ -20,7 +20,9 @@ namespace fs = std::filesystem;
 
 // the default constructor
 Data::Data(void) {
-
+	labelImages.reserve(NUMOFCLASSES);
+	labelNames.reserve(NUMOFCLASSES);
+	numOfPoints.reserve(NUMOFCLASSES);
 }
 
 // destructor
@@ -778,9 +780,6 @@ Mat Data::loadImage(string fname) {
 	}
 
 	return polSARData.clone();
-	//cout << polSARData.channels();
-	//show the image
-	//imshow("Image", polSARData);
 }
 
 
@@ -795,23 +794,26 @@ void ReadClassLabels(string labelPath, vector<string> &labelNames, vector<Mat> &
 fs::recursive_directory_iterator iter(labelPath);
 fs::recursive_directory_iterator end;
 	while (iter != end) {
-		labelNames.push_back(iter->path().string());
-
-		Mat img = imread(iter->path().string());
+		string tp = iter->path().string();
+		size_t pos = 0;
+		//get the filename from path without extension
+		string base_filename = tp.substr(tp.find_last_of("/\\") + 1);
+		size_t position = base_filename.find(".");
+		string fileName = (string::npos == position) ? base_filename : base_filename.substr(0, position);
+		labelNames.push_back(fileName);
+		Mat img = imread(tp);
 		if (!img.data) {
 			cout << "ERROR: Cannot find labelled image" << endl;
 			cout << "Press enter to exit..." << endl;
 			cin.get();
 			exit(0);
 		}
-		//cout << "Before" << endl;
-		//cout << img.rows << " " << img.cols << " " << img.type() << " " << img.channels() << endl;
+		/*Ensure that the number of channels is always 1*/
+		if (img.channels() > 1) {
+			cvtColor(img, img, CV_BGR2GRAY);
+		}
 		img.convertTo(img, CV_32FC1);
-		cvtColor(img, img, CV_BGR2GRAY);
-		//cout << "After" << endl;
-		//cout << img.rows << " " << img.cols << " " << img.type() << " " << img.channels() << endl;
 		labelImages.push_back(img);
-
 		error_code ec;
 		iter.increment(ec);
 		if (ec) {

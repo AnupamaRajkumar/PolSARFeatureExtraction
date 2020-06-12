@@ -36,15 +36,24 @@ public:
 	vector<Point2i> DrawSamples(vector<Point2i> numOfPoints, int numOfSamples, int sizeOfPatch, Mat labelImages);
 	vector<Mat> GetPatches(Mat origImg, vector<Point2i> samplePoints, int sizeOfPatch);
 	/***********Functions***************/
-private:
+
 	/***********Variables***************/
 	// data = scattering vector with values [HH, VV, HV]
 	std::vector<cv::Mat> data;
 	unsigned border = 3;
-	/*vector<Mat> labelImages;
+	vector<Mat> labelImages;
 	vector<string> labelNames;
-	vector<vector<Point2i>> numOfPoints;*/
+	vector<vector<Point2i>> numOfPoints;
+
+	typedef struct {
+		vector<Point2i> Samples;
+		vector<string> labelName;
+	} trainTestData;
+
+	trainTestData trainSamples;
+
 	/***********Variables***************/
+
 };
 
 
