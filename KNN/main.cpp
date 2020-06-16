@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <random>
+#include <algorithm>
 
 #include "Data.h"
 #include "KNN.h"
@@ -33,7 +35,7 @@ int main(int argc, char** argv)
 {
 	cout << "In main!!" << endl;
 	/*********Variables Area*************/
-	int k;
+	int k, kSize;
 	int numberOfTrainSamples;
 	int numberOfTestSamples;
 	bool train;
@@ -42,11 +44,13 @@ int main(int argc, char** argv)
 	KNN knn;
 	Feature feature;
 	Utils utils;
+	string featureName;
 
 	/*********Variable Initialization****************/
-	k = 5;
+	k = 1;
+	kSize = 3;
 	numberOfTrainSamples = 20;
-	numberOfTestSamples = 5;
+	numberOfTestSamples = 2;
 
 	/*********Function calls****************/
 	//load PolSAR data
@@ -58,10 +62,13 @@ int main(int argc, char** argv)
 	//load labels
 	data.loadLabels(argv[3], data.labelImages, data.labelNames, data.numOfPoints);
 	cout << "Labels loaded" << endl;
+	//Splitting training and testing data for classification
+	for (int i = 0; i < 5; i++) {
+		DivideTrainTestData(numberOfTrainSamples, numberOfTestSamples, data);
+	}
+
 
 	
-	//Splitting training and testing data for classification
-	DivideTrainTestData(numberOfTrainSamples, numberOfTestSamples, data);
 
 	cout << "Training samples:" << data.trainSamples.Samples.size() << endl;
 	cout << "Training Labels:" << data.trainSamples.labelName.size() << endl;
@@ -70,10 +77,12 @@ int main(int argc, char** argv)
 
 	
 	/*Computing texture feature extractor*/
-	vector<Mat> trainTexture;
+	vector<Mat> trainTexture, filtTrainText;
 	vector<string> trainTextLabels;
 	train = true;
+	filtTrainText.reserve(trainTexture.size());
 	feature.GetTextureFeature(trainTexture, trainTextLabels, data, train);
+	//utils.getAverageFilter(trainTexture, filtTrainText, kSize);
 
 	/*texture is the training data as it has all the values and labels
 	 test data needs to be classified*/
@@ -82,7 +91,8 @@ int main(int argc, char** argv)
 	train = false;
 	feature.GetTextureFeature(testTexture, testTextLabel, data, train);
 
-	knn.KNNTest(trainTexture, trainTextLabels, testTexture, testTextLabel, k);
+	//utils.getAverageFilter();
+	knn.KNNTest(trainTexture, trainTextLabels, testTexture, testTextLabel, k, feature.featureName);
 
 	waitKey(0);
 	return 0;	
@@ -103,6 +113,11 @@ void DivideTrainTestData(int numberOfTrainSamples,
 	int training_start_idx = int(data.labelImages[0].cols / 5);
 
 	int trainCnt, testCnt;
+	//random samples generator
+	std::random_device rd;										   // obtain a random number from hardware
+	std::mt19937 eng(rd());										   // seed the generator
+	std::uniform_int_distribution<> distrX(0, data.labelImages[0].rows);		   // define the range
+	std::uniform_int_distribution<> distrY(0, data.labelImages[0].cols);
 
 	/*The idea is to get a balanced division between all the classes. 
 	5 classes with equal number of points. Also, the first 1/5th region is 
@@ -114,14 +129,17 @@ void DivideTrainTestData(int numberOfTrainSamples,
 		testCnt = 0;
 		/*for each point in each class*/
 		for (int pt = 0; pt < data.numOfPoints[cnt].size(); pt++) {
-			vector<Point2i> pts;
-			if (data.numOfPoints[cnt][pt].y > training_start_idx) {
+			int x = distrX(eng);
+			int y = distrY(eng);
+			Point2i newSample(data.numOfPoints[cnt][pt].x, data.numOfPoints[cnt][pt].y);
+			if (newSample.y > training_start_idx) {
+				//cout << "newsample:" << newSample.x << "x" << newSample.y << endl;
 				//cout << pt << trainCnt << endl;
 				/*Ensure that the number of points is less than the max points*/
 				if (trainCnt < samplesPerClass) {
-					int val = getSafeSamplePoints(data.numOfPoints[cnt][pt], data, samplesPerClass, cnt);
-					if (val == 1) {
-						data.trainSamples.Samples.push_back(data.numOfPoints[cnt][pt]);
+					int val = getSafeSamplePoints(newSample, data, samplesPerClass, cnt);
+					if (val == 1) {						
+						data.trainSamples.Samples.push_back(newSample);
 						data.trainSamples.labelName.push_back(data.labelNames[cnt]);
 						trainCnt++;
 					}
@@ -130,9 +148,9 @@ void DivideTrainTestData(int numberOfTrainSamples,
 			else
 			{
 				if (testCnt < numberOfTestSamples) {
-					int val = getSafeSamplePoints(data.numOfPoints[cnt][pt], data, samplesPerClass, cnt);
+					int val = getSafeSamplePoints(newSample, data, samplesPerClass, cnt);
 					if (val == 1) {
-						data.testSamples.Samples.push_back(data.numOfPoints[cnt][pt]);
+						data.testSamples.Samples.push_back(newSample);
 						data.testSamples.labelName.push_back(data.labelNames[cnt]);
 						testCnt++;
 					}
