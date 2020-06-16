@@ -11,7 +11,7 @@ using namespace cv;
 class KNN {
 public:
 
-	void KNNTest(vector<Mat>& trainVal, vector<string>& trainLabels, vector<Mat>& testVal, vector<string>& testLabels, int k);
+	void KNNTest(vector<Mat>& trainVal, vector<string>& trainLabels, vector<Mat>& testVal, vector<string>& testLabels, int k, string& featureName);
 	double Euclidean(Mat& testVal, Mat& trainVal);	
 	string Classify(vector<pair<double, string>>& distVec, int k);
 

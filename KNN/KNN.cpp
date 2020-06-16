@@ -2,6 +2,7 @@
 #include "Data.h"
 #include "Utils.h"
 #include "Performance.h"
+#include "Feature.h"
 
 #include <iostream>
 #include <math.h>
@@ -127,6 +128,7 @@ string KNN::Classify(vector<pair<double, string>>& distVec, int k) {
 }
 
 
+
 /***********************************************************************
 Verifying KNN Classifier with random samples
 Author : Anupama Rajkumar
@@ -134,9 +136,12 @@ Date : 12.06.2020
 Description: Classify test points using KNN Classifier
 *************************************************************************/
 
-void KNN::KNNTest(vector<Mat>& trainVal, vector<string>& trainLabels, vector<Mat>& testVal, vector<string>& testLabels, int k) {
+void KNN::KNNTest(vector<Mat>& trainVal, vector<string>& trainLabels, 
+				  vector<Mat>& testVal, vector<string>& testLabels, 
+				  int k, string& featureName) {
 	/*for each sample in the testing data, caculate distance from each training sample */
 	vector<string> classResult;
+	Feature f;
 	for (int i = 0; i < testVal.size(); i++) {								//for each test sample
 		vector<pair<double, string>> distVec;
 		for (int j = 0; j < trainVal.size(); j++) {							//for every training sample
@@ -149,10 +154,14 @@ void KNN::KNNTest(vector<Mat>& trainVal, vector<string>& trainLabels, vector<Mat
 		sort(distVec.begin(), distVec.end());
 		//classify for each row the label patch
 		string classVal = this->Classify(distVec, k);
+		//cout << "Feature point classified as " << classVal << endl;
 		classResult.push_back(classVal);
 	}	
 	double accuracy = perform.calculatePredictionAccuracy(classResult, testLabels);
 	cout << "Accuracy: " << accuracy << endl;
+	//log the calculated accuracy
+	cout << "feature name:" << featureName << endl;
+	utils.WriteToFile(k, accuracy, trainVal.size(), testVal.size(), featureName);
 }
 
 

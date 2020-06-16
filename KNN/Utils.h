@@ -10,7 +10,7 @@ using namespace cv;
 
 class Utils {
 	public:
-		void WriteToFile(Mat& labelMap, string& fileName);
+		void WriteToFile(int k, double accuracy, int trainSize, int testSize, string& featureName);
 		map<string, Vec3f> loadLabelsMetadata();
 		Mat_<Vec3f> visualiseLabels(Mat &image, string& imageName);
 		void Visualization(string& fileName, string& imageName, Size size);
@@ -19,6 +19,7 @@ class Utils {
 		void VisualizationImages(Size size);
 		void generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat& labelMap);
 		void generateTestLabel(vector<Mat>& label, vector<string>& labelName, Mat& labelMap, int cnt);
+		void getAverageFilter(vector<Mat>& trainTexture, vector<Mat>& filtTrainText, int kSize);
 
 };
 #endif
