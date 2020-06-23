@@ -13,6 +13,10 @@ add_library(code
     Feature.h
 	KNN.cpp
 	KNN.h
+	Utils.cpp
+	Utils.h
+	Performance.cpp
+	Performance.h
 )
 
 set_target_properties(code PROPERTIES
