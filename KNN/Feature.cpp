@@ -48,6 +48,66 @@ void Feature::lexi2pauli(vector<Mat>& lexi, vector<Mat>& pauli) {
 		pauli.push_back(k3);
 }
 
+/************************************************
+Lexi Decomposition
+************************************************/
+void Feature::getLexiBasis(const Mat& hh, const Mat& vv, const Mat& hv, vector<Mat>& lexi) {
+	lexi.push_back(hh);
+	lexi.push_back(sqrt(2.0) * hv);
+	lexi.push_back(vv);
+}
+
+void Feature::getPauliBasis(const Mat& hh, const Mat& vv, const Mat& hv, vector<Mat>& pauli) {
+	pauli.push_back((hh + vv) / sqrt(2.0));
+	pauli.push_back((hh - vv) / sqrt(2.0));
+	pauli.push_back(hv * sqrt(2.0));
+}
+
+
+
+void Feature::GetCoherencyMat(vector<Mat>& pauli, vector<Mat>& coherencyMat, int winSize) {
+	this->vec2mat(pauli, coherencyMat, winSize);
+}
+
+void Feature::vec2mat(const vector<Mat>& basis, vector<Mat>& mat, int winSize) {
+	Mat m00, m01, m02, m11, m12, m22;
+
+	mulSpectrums(basis.at(0), basis.at(0), m00, 0, true); //|k_0 | ^ 2
+	mulSpectrums(basis.at(0), basis.at(1), m01, 0, true); //k_0*conj(k_1)
+	mulSpectrums(basis.at(0), basis.at(2), m02, 0, true); //k_0*conj(k_2)
+	mulSpectrums(basis.at(1), basis.at(1), m11, 0, true); //k_1|^2
+	mulSpectrums(basis.at(1), basis.at(2), m12, 0, true); //k_1*conj(k_2)
+	mulSpectrums(basis.at(2), basis.at(2), m22, 0, true); //|k_2|^2 
+
+	cv::blur(m00, m00, Size(winSize, winSize));
+	cv::blur(m01, m01, Size(winSize, winSize));
+	cv::blur(m02, m02, Size(winSize, winSize));
+	cv::blur(m11, m11, Size(winSize, winSize));
+	cv::blur(m12, m12, Size(winSize, winSize));
+	cv::blur(m22, m22, Size(winSize, winSize));
+
+	vector<Mat> m00Comp, m11Comp, m22Comp, m01Comp, m02Comp, m12Comp;
+	split(m00, m00Comp);
+	split(m11, m11Comp);
+	split(m22, m22Comp);
+	split(m01, m01Comp);
+	split(m02, m02Comp);
+	split(m12, m12Comp);
+
+	mat.push_back(m00Comp[0]);		//diagonal element m00
+	mat.push_back(m11Comp[0]);		//diagonal element m11
+	mat.push_back(m22Comp[0]);		//diagonal element m22
+	mat.push_back(m01Comp[0]);		//real component m01
+	mat.push_back(m01Comp[1]);		//imag component m01
+	mat.push_back(m02Comp[0]);		//real component m02
+	mat.push_back(m02Comp[1]);		//imag component m02
+	mat.push_back(m12Comp[0]);		//real component m12
+	mat.push_back(m12Comp[1]);		//imag component m12
+	
+}
+
+
+
 /*Author : Jun Xiang*/
 Mat Feature::getComplexAmpl(const Mat& in) {
 
@@ -80,14 +140,52 @@ Mat Feature::logTransform(const Mat& in) {
 
 }
 
+vector<double> Feature::logTransform(vector<double>& in) {
+
+	vector<double> out;
+	out = in;
+	log(out, out);
+
+	return out;
+
+}
+
+void Feature::GetCoherencyFeatures(Data data, vector<Mat>& result) {
+	Mat hh, vv, hv;
+	int winSize = 3;
+	hh = data.data[0];
+	vv = data.data[1];
+	hv = data.data[2];
+
+	vector<Mat> pauli;
+	this->getPauliBasis(hh, vv, hv, pauli);
+	vector<Mat> coherencyMat;
+	this->GetCoherencyMat(pauli, coherencyMat, winSize);
+
+	copy(coherencyMat.begin(), coherencyMat.end(), std::back_inserter(result));
+
+	for (auto& e : result) {
+		Mat temp;
+		if (e.channels() == 1) {
+			temp = this->logTransform(e);
+		}
+		else if (e.channels() == 2) {
+			temp = this->logTransform(this->getComplexAmpl(e));
+		}
+		e = temp;
+	}
+
+}
+
+
 // texture feature vector length: 64
 /***************************************************************
 Author  : Jun Xiang with modifications by Anupama Rajkumar
 Date	: 11.06.2020
 ****************************************************************/
-void Feature::GetTextureFeature(vector<Mat>& features, vector<string>& classValue, Data data, bool flag) {
+void Feature::GetTextureFeature(vector<Mat>& features, vector<unsigned char>& classValue, Data data, bool flag) {
 
-	Utils utils;
+	featureName = "Texture";
 	int cnt = 0;
 	cout << "Starting to calculate texture features......" << endl;
 	int pStart_r, pStart_c, pEnd_r, pEnd_c;
