@@ -10,16 +10,19 @@
 #include <opencv2/opencv.hpp>
 #include <random>
 #include <algorithm>
+#include <fstream>
 
 #include "Data.h"
 #include "KNN.h"
 #include "Feature.h"
 #include "Utils.h"
 #include "mp.hpp"
+#include "Autoencoder.h"
 
 
 using namespace std;
 using namespace cv;
+namespace fs = std::filesystem;
 
 
 
@@ -30,6 +33,7 @@ void DivideTrainTestData(int numberOfTrainSamples,
 
 int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, int cnt);
 
+void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec);
 
 int main(int argc, char** argv)
 {
@@ -65,15 +69,75 @@ int main(int argc, char** argv)
 	
 	data.loadLabels(argv[3], data.labelImages, data.labelNames, data.numOfPoints);
 	cout << "Labels loaded" << endl;
-	
-	/*calculate feature vector of all the images*/
-	vector<Mat> result;
-	feature.GetCoherencyFeatures(data, result);
+
+	fstream coherenceFile;
+	string fileName = "CoherenceVectorList.csv";
+
+	coherenceFile.open(fileName, fstream::in);
+	coherenceFile.seekg(0, ios::end);
+	int length = coherenceFile.tellg();
+	vector<vector<float>> coherenceVec;
+	/*if the file is empty*/
+	if (length == 0) {
+		cout << "Calculating coherency matrix" << endl;
+		/*calculate feature vector of all the images*/
+		vector<vector<float>> result;
+		
+		feature.GetCoherencyFeatures(data, result);
+		ConvertToCoherenceVector(result, coherenceVec);
+
+		coherenceFile.open(fileName, fstream::out);
+		for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {
+			for (int len = 0; len < coherenceVec[cnt].size(); len++) {
+				coherenceFile << coherenceVec[cnt].at(len) << ",";
+			}
+			coherenceFile << endl;
+		}
+	}
+	else {
+		//reading data from csv
+		cout << "Reading from the file" << endl;
+		cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(fileName, 0, -1, -1);
+		coherenceVec = raw_data->getSamples();
+	}
+
+	/*Autoencoder*/
+	double learningRate, momentum;
+	int inputDim, hiddenDim;
+	learningRate = 1e-5;
+	momentum = 0.2;
+	inputDim = 9;
+	hiddenDim = 6;
+	Autoencoder *aEncoder =  new Autoencoder(inputDim, hiddenDim, learningRate, momentum);		
+
+	int trainSamples = 100;
+	cout << "Training the autoencoder" << " with " << trainSamples << endl;	
+	for (int cnt = 0; cnt < trainSamples; cnt++) {
+		aEncoder->train(coherenceVec[cnt]);
+	}
+
+	int testSamples = 100;
+	cout << "Testing the autoencoder" << " with " << testSamples << endl;	
+	for (int cnt = 0; cnt < testSamples; cnt++) {
+		aEncoder->test(coherenceVec[cnt]);
+	}
 
 	waitKey(0);
 	return 0;	
 }
 
+
+void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec) {
+	unsigned int maxLen = result[0].size();
+	for (int len = 0; len < maxLen; len++) {
+		vector<float> cohVec;
+		for (int cnt = 0; cnt < result.size(); cnt++) {
+			float val = result[cnt].at(len);
+			cohVec.push_back(val);
+		}
+		coherenceVec.push_back(cohVec);
+	}
+}
 
 
 /************************************************************
@@ -153,6 +217,8 @@ int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, in
 		return 0;
 	}
 }
+
+
 
 
 

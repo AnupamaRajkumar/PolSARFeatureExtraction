@@ -30,6 +30,7 @@ void Utils::WriteToFile(int k, double accuracy, int trainSize, int testSize, str
 
 
 
+
 /***********************************************************************
 A helper function containing color metadata to be used when visualizing
 Author : Eli Ionescu
@@ -329,110 +330,9 @@ void Utils::VisualizationImages(Size size) {
 }
 
 
-/**
- * @brief Convolution in spatial domain.
- * @details Performs spatial convolution of image and filter kernel.
- * @params src Input image
- * @params kernel Filter kernel
- * @returns Convolution result
- */
-
-vector<Mat> spatialConvolution( vector<Mat>& src, const cv::Mat_<float>& kernel)
-{
-	vector<Mat> result;
-	result.reserve(src.size());
-	/*for (int cnt = 0; cnt < result.size(); cnt++) {
-		result[cnt] = Mat::zeros(src[cnt].size(), src[cnt].type());
-	}*/
-	cv::Mat_<float> tempKernel = cv::Mat::zeros(kernel.size(), kernel.type());
-	int colMiddle, rowMiddle;
-	int row, col, i, j;
-	double sum = 0;
-	colMiddle = ((kernel.cols - 1) / 2);
-	rowMiddle = ((kernel.rows - 1) / 2);
-
-	/*flip columns*/
-	for (row = 0; row < kernel.rows; row++) {
-		for (col = 0; col < kernel.cols; col++) {
-			if ((col != colMiddle) && (col < colMiddle))
-			{
-				tempKernel[row][col] = kernel[row][kernel.cols - 1 - col];
-				tempKernel[row][kernel.cols - 1 - col] = kernel[row][col];
-			}
-			else if (col == colMiddle)
-			{
-				tempKernel[row][col] = kernel[row][col];
-			}
-			else
-			{
-
-			}
-		}
-	}
-
-	/*flip rows*/
-	for (col = 0; col < kernel.cols; col++) {
-		for (row = 0; row < kernel.rows; row++) {
-			if ((row != rowMiddle) && (row < rowMiddle))
-			{
-				tempKernel[row][col] = tempKernel[kernel.rows - 1 - row][col];
-				tempKernel[kernel.rows - 1 - row][col] = tempKernel[row][col];
-			}
-			else if (row == rowMiddle)
-			{
-				tempKernel[row][col] = tempKernel[row][col];
-			}
-			else
-			{
-
-			}
-		}
-	}
-	int border_size = kernel.rows / 2;
-	/*vector<Mat> bordered_src;
-	bordered_src.reserve(src.size());
-	// 1. Border handling.
-	int border_size = kernel.rows / 2;
-	for (int cnt = 0; cnt < src.size(); cnt++) {
-		bordered_src.push_back(getBorderedImage(src[cnt], border_size));
-	}*/
-	
-
-	//cv::Mat_<float> result = cv::Mat(src);
-//	float sum;
-	// Go through the image
-	//row = src.data[0].size();
-	//col = src.data[0][0].size();
-	for (int cnt = 0; cnt < src.size(); cnt++) {
-		for (unsigned i = 0; i < src[cnt].rows; i++)
-		{
-			Mat v1;
-			v1.reserve(col);
-			for (unsigned j = 0; j < src[cnt].cols; j++)
-			{
-				// Convolve
-				Mat sum = Mat::zeros(kernel.size(), kernel.type());
-				for (unsigned r = i; r <= i + tempKernel.rows; r++) {
-					for (unsigned c = j; c <= j + tempKernel.cols; c++) {
-						//if out of bounds, ignore
-						if (r < 0 || r >= src[cnt].rows || c < 0 || c >= src[cnt].cols) {
-							continue;
-						}
-							
-						sum += sum += src[cnt].at<float>(r, c) * tempKernel(r - i + border_size, c - j + border_size);
-					}
-				}
-				v1.push_back(sum);
-			}
-			result.push_back(v1);
-		}
-	}
-	return result;
-}
 
 /**
  * @brief Moving average filter (aka box filter)
- * @note: you might want to use Dip2::spatialConvolution(...) within this function
  * @param src Input image
  * @param kSize Window size used by local average
  * @returns Filtered image
@@ -440,11 +340,29 @@ vector<Mat> spatialConvolution( vector<Mat>& src, const cv::Mat_<float>& kernel)
 
 void Utils::getAverageFilter(vector<Mat>& trainTexture, vector<Mat>& filtTrainText, int kSize) {
 	
-	/*vector<Mat> result; 
-	for (int cnt = 0; cnt < result.size(); cnt++) {
-		result[cnt] = Mat::zeros(trainTexture[cnt].size(), trainTexture[cnt].type());
-	}*/
-	cv::Mat kernel = cv::Mat(kSize, kSize, CV_32FC1, 1.0 / (kSize*kSize));
-	filtTrainText = spatialConvolution(trainTexture, kernel);
+	int midWay = kSize / 2;
+	int rows = trainTexture.size();
+	int cols = trainTexture[0].cols;
+	cout << rows << "x" << cols << endl;
+	vector<Mat> filtTrain;
+	for (int i = 0; i < rows; i++) {
+		Mat v1;
+		for (int j = 0; j < cols; j++) {
+			double avg = 0.0f;
+			int numOfElements = 0;
+			for (int r = (i - midWay); r < i + midWay; r++) {
+				for (int c = (j - midWay); c < (j + midWay); c++) {
+					//if out of bounds, ignore
+					if (r < 0 || r >= trainTexture.size() || c < 0 || c > trainTexture[i].cols)
+						continue;
+					avg += trainTexture[i].at<float>(r,c);
+					numOfElements++;
+				}
+			}
+			avg = avg / numOfElements;
+			v1.push_back(avg);
+		}
+		filtTrain.push_back(v1);	
+	}
 
 }

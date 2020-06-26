@@ -17,43 +17,43 @@ Autoencoder::Autoencoder(int inputDim, int hiddenDim, double learningRate, doubl
 	m_learningRate = learningRate;
 	m_momentum = momentum;
 
-	m_inputValues = vector<double>();
-	m_hiddenValues = vector<double>();
-	m_outputValues = vector<double>();
+	m_inputValues = vector<float>();
+	m_hiddenValues = vector<float>();
+	m_outputValues = vector<float>();
 
-	m_encoderWt = new double*[m_hiddenDimension];
+	m_encoderWt = new float*[m_hiddenDimension];
 	for (int cnt = 0; cnt < m_hiddenDimension; cnt++) {
 		m_encoderWt[cnt] = this->random(m_dataDimension);
 	}
 
-	m_decoderWt = new double*[m_dataDimension];	
+	m_decoderWt = new float*[m_dataDimension];	
 	for (int cnt = 0; cnt < m_dataDimension; cnt++) {
 		m_decoderWt[cnt] = this->random(m_hiddenDimension);
 	}
 
-	m_decoderWtChanges = new double*[m_hiddenDimension];
+	m_decoderWtChanges = new float*[m_hiddenDimension];
 	for (int cnt = 0; cnt < m_dataDimension; cnt++) {
-		m_decoderWtChanges[cnt] = new double[m_dataDimension]();
+		m_decoderWtChanges[cnt] = new float[m_dataDimension]();
 	}
-	m_updatedWt = new double*[m_hiddenDimension];
+	m_updatedWt = new float*[m_hiddenDimension];
 	for (int cnt = 0; cnt < m_dataDimension; cnt++) {
-		m_updatedWt[cnt] = new double[m_dataDimension]();
+		m_updatedWt[cnt] = new float[m_dataDimension]();
 	}
 
-	m_encoderWtChanges = new double*[m_dataDimension];
+	m_encoderWtChanges = new float*[m_dataDimension];
 	for (int cnt = 0; cnt < m_hiddenDimension; cnt++) {
-		m_encoderWtChanges[cnt] = new double[m_hiddenDimension]();
+		m_encoderWtChanges[cnt] = new float[m_hiddenDimension]();
 	}
 
 
-	m_inputBias = new double[m_hiddenDimension];			/*think of the dimension of the bias*/
-	m_deltas = new double[m_dataDimension]();
+	m_inputBias = new float[m_hiddenDimension];			/*think of the dimension of the bias*/
+	m_deltas = new float[m_dataDimension]();
 }
 
-double* Autoencoder::random(size_t elementSize) {
-	double *result = new double[elementSize];
+float* Autoencoder::random(size_t elementSize) {
+	float *result = new float[elementSize];
 	for (size_t i = 0; i < elementSize; i++) {
-		result[i] = ((double)rand() / (RAND_MAX));
+		result[i] = ((float)rand() / (RAND_MAX));
 	}
 	return result;
 }
@@ -82,7 +82,7 @@ void Autoencoder::feedforward() {
 
 	/*encoder - input->hidden layer*/
 	for (auto i = 0; i < m_hiddenDimension; i++) {
-		double total = 0.0;
+		float total = 0.0;
 		for (auto j = 0; j < m_dataDimension; j++) {
 			total += m_encoderWt[i][j] * m_inputValues[j];
 		}
@@ -94,7 +94,7 @@ void Autoencoder::feedforward() {
 
 	/*decoder - hidden layer -> output*/
 	for (auto i = 0; i < m_dataDimension; i++) {
-		double total = 0.0;
+		float total = 0.0;
 		for (auto j = 0; j < m_hiddenDimension; j++) {
 			total += m_decoderWt[i][j] * m_hiddenValues[j];
 		}
@@ -127,7 +127,7 @@ void Autoencoder::backpropagate() {
 
 	for (auto i = 0; i < m_hiddenDimension; i++) {
 		for (auto j = 0; j < m_dataDimension; j++) {
-			double dActivation = this->sigmoidDerivation(m_hiddenValues[i]);
+			float dActivation = this->sigmoidDerivation(m_hiddenValues[i]);
 			m_encoderWtChanges[i][j] = m_updatedWt[j][i] * dActivation * m_inputValues[j];
 		}
 	}
@@ -135,7 +135,7 @@ void Autoencoder::backpropagate() {
 	/*Adjusting the weights - encoder*/
 	for (auto i = 0; i < m_hiddenDimension; i++) {
 		for (auto j = 0; j < m_dataDimension; j++) {
-			double weightChange = -(m_learningRate * m_momentum * m_encoderWtChanges[i][j]);
+			float weightChange = -(m_learningRate * m_momentum * m_encoderWtChanges[i][j]);
 			m_encoderWt[i][j] += weightChange;
 		}
 	}
@@ -143,20 +143,34 @@ void Autoencoder::backpropagate() {
 	/*Adjusting the weights - decoder*/
 	for (auto i = 0; i < m_dataDimension; i++) {
 		for (auto j = 0; j < m_hiddenDimension; j++) {
-			double weightChange = -(m_learningRate * m_momentum * m_decoderWtChanges[i][j]);
+			float weightChange = -(m_learningRate * m_momentum * m_decoderWtChanges[i][j]);
 			m_decoderWt[i][j] += weightChange;
 		}
 	}
 }
 
 
-
-
-
-double Autoencoder::sigmoid(double d) {
+float Autoencoder::sigmoid(float d) {
 	return 1.0 / (1.0 + exp(-d));
 }
 
-double Autoencoder::sigmoidDerivation(double d) {
+float Autoencoder::sigmoidDerivation(float d) {
 	return d * (1.0 - d);
+}
+
+void Autoencoder::train(vector<float>& data) {
+	for (int cnt = 0; cnt < data.size(); cnt++) {
+		m_inputValues[cnt] = data[cnt];
+	}
+
+	this->feedforward();
+	this->backpropagate();
+}
+
+void Autoencoder::test(vector<float>& data) {
+	for (int cnt = 0; cnt < data.size(); cnt++) {
+		m_inputValues[cnt] = data[cnt];
+	}
+
+	this->feedforward();
 }

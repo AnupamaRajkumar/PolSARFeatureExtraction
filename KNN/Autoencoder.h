@@ -18,12 +18,12 @@ public:
 	Autoencoder(int inputDim, int hiddenDim, double learningRate, double momentum);
 	~Autoencoder();
 
-	//void train(vector<double>& data);
-	//void test(vector<double>& data);
+	void train(vector<float>& data);
+	void test(vector<float>& data);
 
-	double *random(size_t elementSize);
-	double sigmoid(double value);
-	double sigmoidDerivation(double value);
+	float *random(size_t elementSize);
+	float sigmoid(float value);
+	float sigmoidDerivation(float value);
 
 private:
 	int m_dataDimension;				// #of output neurons = #of input neurons
@@ -31,18 +31,18 @@ private:
 	double m_learningRate;
 	double m_momentum;
 
-	vector<double> m_inputValues;
-	vector<double> m_hiddenValues;
-	vector<double> m_outputValues;
+	vector<float> m_inputValues;
+	vector<float> m_hiddenValues;
+	vector<float> m_outputValues;
 
-	double **m_encoderWt;
-	double **m_decoderWt;
-	double **m_updatedWt;
-	double **m_encoderWtChanges;
-	double **m_decoderWtChanges;
+	float **m_encoderWt;
+	float **m_decoderWt;
+	float **m_updatedWt;
+	float **m_encoderWtChanges;
+	float **m_decoderWtChanges;
 
-	double *m_inputBias;
-	double *m_deltas;
+	float *m_inputBias;
+	float *m_deltas;
 
 	void feedforward();
 	void backpropagate();

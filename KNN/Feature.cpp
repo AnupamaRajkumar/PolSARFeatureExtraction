@@ -63,11 +63,68 @@ void Feature::getPauliBasis(const Mat& hh, const Mat& vv, const Mat& hv, vector<
 	pauli.push_back(hv * sqrt(2.0));
 }
 
+/*void Feature::getPauliBasis(vector<double>& hh, vector<double>& vv, vector<double>& hv, vector<vector<double>>& pauli) {
+	unsigned int s = hh.size();
+	for (auto cnt = 0; cnt < s; cnt++) {
+		vector<double> p;
+		double p0 = (hh[cnt] + vv[cnt]) / sqrt(2.0);
+		p.push_back(p0);
+		double p1 = (hh[cnt] - vv[cnt]) / sqrt(2.0);
+		p.push_back(p1);
+		double p2 = (hv[cnt] * sqrt(2.0));
+		p.push_back(p2);
+		pauli.push_back(p);
+	}
+
+}*/
+
+/*Author : Jun Xiang*/
+Mat Feature::getComplexAmpl(const Mat& in) {
+
+	vector<Mat> channels;
+
+	split(in, channels);
+	pow(channels[0], 2, channels[0]);
+	pow(channels[1], 2, channels[1]);
+	Mat out = channels[0] + channels[1];
+	pow(out, 0.5, out);
+
+	return out;
+
+}
+
+/*Author : Jun Xiang*/
+Mat Feature::logTransform(const Mat& in) {
+
+	Mat out;
+	if (in.channels() == 2) {
+		out = getComplexAmpl(in);
+	}
+	else
+		out = in;
+
+	out = out + 1;
+	log(out, out);
+
+	return out;
+
+}
+
+vector<float> Feature::logTransform(vector<float>& in) {
+
+	vector<float> out;
+	out = in;
+	log(out, out);
+
+	return out;
+
+}
 
 
 void Feature::GetCoherencyMat(vector<Mat>& pauli, vector<Mat>& coherencyMat, int winSize) {
 	this->vec2mat(pauli, coherencyMat, winSize);
 }
+
 
 void Feature::vec2mat(const vector<Mat>& basis, vector<Mat>& mat, int winSize) {
 	Mat m00, m01, m02, m11, m12, m22;
@@ -103,75 +160,38 @@ void Feature::vec2mat(const vector<Mat>& basis, vector<Mat>& mat, int winSize) {
 	mat.push_back(m02Comp[1]);		//imag component m02
 	mat.push_back(m12Comp[0]);		//real component m12
 	mat.push_back(m12Comp[1]);		//imag component m12
-	
-}
-
-
-
-/*Author : Jun Xiang*/
-Mat Feature::getComplexAmpl(const Mat& in) {
-
-	vector<Mat> channels;
-
-	split(in, channels);
-	pow(channels[0], 2, channels[0]);
-	pow(channels[1], 2, channels[1]);
-	Mat out = channels[0] + channels[1];
-	pow(out, 0.5, out);
-
-	return out;
 
 }
 
-/*Author : Jun Xiang*/
-Mat Feature::logTransform(const Mat& in) {
-
-	Mat out;
-	if (in.channels() == 2) {
-		out = getComplexAmpl(in);
+void ConvertToVector(vector<Mat>& coherencyMat, vector<vector<float>>& coherencyVec) {
+	for (int cnt = 0; cnt < coherencyMat.size(); cnt++) {
+		vector<float> vec;
+		vec.assign(coherencyMat[cnt].begin <float>(), coherencyMat[cnt].end<float>());
+		coherencyVec.push_back(vec);
 	}
-	else
-		out = in;
-
-	out = out + 1;
-	log(out, out);
-
-	return out;
-
 }
 
-vector<double> Feature::logTransform(vector<double>& in) {
-
-	vector<double> out;
-	out = in;
-	log(out, out);
-
-	return out;
-
-}
-
-void Feature::GetCoherencyFeatures(Data data, vector<Mat>& result) {
+void Feature::GetCoherencyFeatures(Data data, vector<vector<float>>& resultVec) {
 	Mat hh, vv, hv;
 	int winSize = 3;
 	hh = data.data[0];
 	vv = data.data[1];
 	hv = data.data[2];
 
+	vector<vector<double>> pauliVec;
 	vector<Mat> pauli;
 	this->getPauliBasis(hh, vv, hv, pauli);
-	vector<Mat> coherencyMat;
+	vector<Mat> coherencyMat;	
+	vector<vector<float>> coherencyVec;
 	this->GetCoherencyMat(pauli, coherencyMat, winSize);
 
-	copy(coherencyMat.begin(), coherencyMat.end(), std::back_inserter(result));
+	ConvertToVector(coherencyMat, coherencyVec);	
+	copy(coherencyVec.begin(), coherencyVec.end(), back_inserter(resultVec));
 
-	for (auto& e : result) {
-		Mat temp;
-		if (e.channels() == 1) {
-			temp = this->logTransform(e);
-		}
-		else if (e.channels() == 2) {
-			temp = this->logTransform(this->getComplexAmpl(e));
-		}
+	for (auto& e : resultVec) {
+		vector<float> temp;
+		temp = this->logTransform(e);
+
 		e = temp;
 	}
 
