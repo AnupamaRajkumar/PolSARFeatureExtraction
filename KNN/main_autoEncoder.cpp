@@ -33,6 +33,8 @@ void DivideTrainTestData(int numberOfTrainSamples,
 
 int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, int cnt);
 
+void WriteCoherenceMatValues(vector<vector<float>>& coherenceMat, string& fileName);
+
 void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec);
 
 int main(int argc, char** argv)
@@ -49,6 +51,7 @@ int main(int argc, char** argv)
 	Feature feature;
 	Utils utils;
 	string featureName;
+	
 
 	/*********Variable Initialization****************/
 	k = 1;
@@ -58,8 +61,8 @@ int main(int argc, char** argv)
 
 	/*********Function calls****************/
 	//load PolSAR data
-	data.loadData(argv[1]);
-	cout << "Data loaded" << endl;
+	//data.loadData(argv[1]);
+	//cout << "Data loaded" << endl;
 
 	/*	1 -> City
 		2 -> Field
@@ -70,62 +73,65 @@ int main(int argc, char** argv)
 	data.loadLabels(argv[3], data.labelImages, data.labelNames, data.numOfPoints);
 	cout << "Labels loaded" << endl;
 
-	fstream coherenceFile;
+	ifstream CoherencevecList;
 	string fileName = "CoherenceVectorList.csv";
-
-	coherenceFile.open(fileName, fstream::in);
-	coherenceFile.seekg(0, ios::end);
-	int length = coherenceFile.tellg();
 	vector<vector<float>> coherenceVec;
-	/*if the file is empty*/
-	if (length == 0) {
-		cout << "Calculating coherency matrix" << endl;
-		/*calculate feature vector of all the images*/
-		vector<vector<float>> result;
-		
-		feature.GetCoherencyFeatures(data, result);
-		ConvertToCoherenceVector(result, coherenceVec);
 
-		coherenceFile.open(fileName, fstream::out);
-		for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {
-			for (int len = 0; len < coherenceVec[cnt].size(); len++) {
-				coherenceFile << coherenceVec[cnt].at(len) << ",";
+	CoherencevecList.open(fileName);
+	if (CoherencevecList) {
+		/*read the contents from file*/
+			//reading data from csv
+		cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(fileName, 0, -2, 0);
+		Mat data = raw_data->getSamples();
+		for (int row = 0; row < data.rows; row++) {
+			vector<float> colData;
+			for (int col = 0; col < data.cols; col++) {
+				colData.push_back(data.at<float>(row, col));
 			}
-			coherenceFile << endl;
-		}
+			coherenceVec.push_back(colData);
+		}		
 	}
 	else {
-		//reading data from csv
-		cout << "Reading from the file" << endl;
-		cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(fileName, 0, -1, -1);
-		coherenceVec = raw_data->getSamples();
+		//load PolSAR data
+		data.loadData(argv[1]);
+		cout << "Data loaded" << endl;
+		cout << "Calculating coherency matrix" << endl;
+		vector<vector<float>> result;
+		feature.GetCoherencyFeatures(data, result);
+		ConvertToCoherenceVector(result, coherenceVec);
+		WriteCoherenceMatValues(coherenceVec, fileName);
 	}
 
-	/*Autoencoder*/
+	/*autoencoder constructor*/
+	int inputDim, hiddenDim, epoch;
 	double learningRate, momentum;
-	int inputDim, hiddenDim;
-	learningRate = 1e-5;
-	momentum = 0.2;
-	inputDim = 9;
-	hiddenDim = 6;
-	Autoencoder *aEncoder =  new Autoencoder(inputDim, hiddenDim, learningRate, momentum);		
+	vector<vector<float>> m_OutputValuesF;
+	m_OutputValuesF.reserve(coherenceVec.size());
+	inputDim = coherenceVec[0].size();
+	hiddenDim = 2;
+	learningRate = 0.1;
+	momentum = 1;
+	epoch = 10;
+	Autoencoder *aeEncoder = new Autoencoder(inputDim, hiddenDim, learningRate, momentum);
+	/*pass the points in coherency vector through autoencoder
+	Here we're calculating features pixel by pixel*/
 
-	int trainSamples = 100;
-	cout << "Training the autoencoder" << " with " << trainSamples << endl;	
-	for (int cnt = 0; cnt < trainSamples; cnt++) {
-		aEncoder->train(coherenceVec[cnt]);
+
+	for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {	
+		aeEncoder->InitializeWts();
+		aeEncoder->InitializeBias();
+		for (int e = 0; e < epoch; e++) {
+			//cout << "Epoch :" << e + 1 << endl;
+			aeEncoder->train(coherenceVec[cnt], m_OutputValuesF, e, cnt);
+		}
 	}
 
-	int testSamples = 100;
-	cout << "Testing the autoencoder" << " with " << testSamples << endl;	
-	for (int cnt = 0; cnt < testSamples; cnt++) {
-		aEncoder->test(coherenceVec[cnt]);
-	}
+	string outFile = "FeatureVector.csv";
+	WriteCoherenceMatValues(m_OutputValuesF, outFile);
 
 	waitKey(0);
 	return 0;	
 }
-
 
 void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec) {
 	unsigned int maxLen = result[0].size();
@@ -137,6 +143,19 @@ void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float
 		}
 		coherenceVec.push_back(cohVec);
 	}
+}
+
+void WriteCoherenceMatValues(vector<vector<float>>& coherenceVec, string& fileName) {
+	fstream coherenceFPtr;
+	coherenceFPtr.open(fileName, fstream::out);
+	for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {		
+		for (int len = 0; len < coherenceVec[cnt].size(); len++) {
+			coherenceFPtr << coherenceVec[cnt].at(len) << ",";			
+		}
+		coherenceFPtr << endl;		
+	}
+	coherenceFPtr.close();
+
 }
 
 
