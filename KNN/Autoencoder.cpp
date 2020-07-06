@@ -45,6 +45,11 @@ Autoencoder::Autoencoder(int inputDim, int hiddenDim, double learningRate, doubl
 		m_decoderWtInit.push_back(val);
 	}
 
+	for (int cnt = 0; cnt < m_hiddenDimension; cnt++) {
+		for (int cnt1 = 0; cnt1 < m_dataDimension; cnt1++) {
+			m_decoderWtInit[cnt1][cnt] = m_encoderWtInit[cnt][cnt1];
+		}
+	}
 	m_hiddenBiasInit = this->random(m_hiddenDimension);
 	m_outputBiasInit = this->random(m_dataDimension);
 }
@@ -53,7 +58,6 @@ void Autoencoder::InitializeWts() {
 	
 	m_encoderWt = m_encoderWtInit;
 	m_decoderWt = m_decoderWtInit;
-
 }
 
 void Autoencoder::InitializeBias() {
@@ -117,7 +121,7 @@ void Autoencoder::feedforward(vector<float>& m_hiddenValues, vector<float>& m_ou
 		/*assign this value to output after passing through activation
 		activation function used: sigmoid*/
 		total += m_outputBias[i];						//(W*x + b)
-		m_outputValues.push_back(this->sigmoid(total));
+		m_outputValues.push_back(total);
 	}
 
 	/*printing output wt vector*/
@@ -134,7 +138,7 @@ void Autoencoder::backpropagate(vector<float>& m_hiddenValues, vector<float>& m_
 	/*for each output value - from outputlayer to hiddenlayer*/
 	for (auto i = 0; i < m_dataDimension; i++) {
 		vector<float> wtChanges;
-		float delta = (m_outputValues[i] - m_inputValues[i])*this->sigmoidDerivation(m_outputValues[i]);
+		float delta = (m_outputValues[i] - m_inputValues[i])*m_outputValues[i];		// this->sigmoidDerivation(m_outputValues[i]);
 		m_deltas.push_back(delta);
 		for (auto j = 0; j < m_hiddenDimension; j++) {
 			/*adjusting weights vector from the hidden layer to output*/
@@ -171,7 +175,7 @@ void Autoencoder::backpropagate(vector<float>& m_hiddenValues, vector<float>& m_
 		for (auto j = 0; j < m_dataDimension; j++) {
 			hBiaserr = m_encoderWt[i][j] * m_deltas[j];
 		}
-		hBiaserr = hBiaserr * this->sigmoidDerivation(m_hiddenValues[i]);
+		hBiaserr = hBiaserr * this->reLUDerivation(m_hiddenValues[i]);
 		m_hiddenBiasChanges.push_back(hBiaserr);
 	}
 

@@ -10,16 +10,19 @@
 #include <opencv2/opencv.hpp>
 #include <random>
 #include <algorithm>
+#include <fstream>
 
 #include "Data.h"
 #include "KNN.h"
 #include "Feature.h"
 #include "Utils.h"
 #include "mp.hpp"
+#include "Autoencoder.h"
 
 
 using namespace std;
 using namespace cv;
+namespace fs = std::filesystem;
 
 
 
@@ -30,6 +33,9 @@ void DivideTrainTestData(int numberOfTrainSamples,
 
 int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, int cnt);
 
+void WriteCoherenceMatValues(vector<vector<float>>& coherenceMat, string& fileName);
+
+void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec);
 
 int main(int argc, char** argv)
 {
@@ -45,59 +51,111 @@ int main(int argc, char** argv)
 	Feature feature;
 	Utils utils;
 	string featureName;
+	
 
 	/*********Variable Initialization****************/
 	k = 1;
 	kSize = 3;
-	numberOfTrainSamples = 20;
-	numberOfTestSamples = 2;
+	numberOfTrainSamples = 5;
+	numberOfTestSamples = 1;
 
 	/*********Function calls****************/
 	//load PolSAR data
-	data.loadData(argv[1]);
-	cout << "Data loaded" << endl;
-	//load RGB image
-	//Mat RGBImg = data.loadImage(argv[2]);
-	//cout << "Image loaded" << endl;
-	//load labels
+	//data.loadData(argv[1]);
+	//cout << "Data loaded" << endl;
+
+	/*	1 -> City
+		2 -> Field
+		3 -> Forest
+		4 -> Grassland
+		5 -> Street		*/
+	
 	data.loadLabels(argv[3], data.labelImages, data.labelNames, data.numOfPoints);
 	cout << "Labels loaded" << endl;
-	//Splitting training and testing data for classification
-	for (int i = 0; i < 5; i++) {
-		DivideTrainTestData(numberOfTrainSamples, numberOfTestSamples, data);
+
+	ifstream CoherencevecList;
+	string fileName = "CoherenceVectorList.csv";
+	vector<vector<float>> coherenceVec;
+
+	CoherencevecList.open(fileName);
+	if (CoherencevecList) {
+		/*read the contents from file*/
+			//reading data from csv
+		cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(fileName, 0, -2, 0);
+		Mat data = raw_data->getSamples();
+		for (int row = 0; row < data.rows; row++) {
+			vector<float> colData;
+			for (int col = 0; col < data.cols; col++) {
+				colData.push_back(data.at<float>(row, col));
+			}
+			coherenceVec.push_back(colData);
+		}		
+	}
+	else {
+		//load PolSAR data
+		data.loadData(argv[1]);
+		cout << "Data loaded" << endl;
+		cout << "Calculating coherency matrix" << endl;
+		vector<vector<float>> result;
+		feature.GetCoherencyFeatures(data, result);
+		ConvertToCoherenceVector(result, coherenceVec);
+		WriteCoherenceMatValues(coherenceVec, fileName);
 	}
 
+	/*autoencoder constructor*/
+	int inputDim, hiddenDim, epoch;
+	double learningRate, momentum;
+	vector<vector<float>> m_OutputValuesF;
+	m_OutputValuesF.reserve(coherenceVec.size());
+	inputDim = coherenceVec[0].size();
+	hiddenDim = 5;
+	learningRate = 0.1;
+	momentum = 1;
+	epoch = 20;
+	Autoencoder *aeEncoder = new Autoencoder(inputDim, hiddenDim, learningRate, momentum);
+	/*pass the points in coherency vector through autoencoder
+	Here we're calculating features pixel by pixel*/
 
-	
+	for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {	
+		aeEncoder->InitializeWts();
+		aeEncoder->InitializeBias();
+		for (int e = 0; e < epoch; e++) {
+			//cout << "Epoch :" << e + 1 << endl;
+			aeEncoder->train(coherenceVec[cnt], m_OutputValuesF, e, cnt);
+		}
+	}
 
-	cout << "Training samples:" << data.trainSamples.Samples.size() << endl;
-	cout << "Training Labels:" << data.trainSamples.labelName.size() << endl;
-	cout << "Testing samples:" << data.testSamples.Samples.size() << endl;
-	cout << "Testing Labels:" << data.testSamples.labelName.size() << endl;
-
-	
-	/*Computing texture feature extractor*/
-	vector<Mat> trainTexture, filtTrainText;
-	vector<string> trainTextLabels;
-	train = true;
-	filtTrainText.reserve(trainTexture.size());
-	feature.GetTextureFeature(trainTexture, trainTextLabels, data, train);
-	//utils.getAverageFilter(trainTexture, filtTrainText, kSize);
-
-	/*texture is the training data as it has all the values and labels
-	 test data needs to be classified*/
-	vector<Mat> testTexture;
-	vector<string> testTextLabel;
-	train = false;
-	feature.GetTextureFeature(testTexture, testTextLabel, data, train);
-
-	//utils.getAverageFilter();
-	knn.KNNTest(trainTexture, trainTextLabels, testTexture, testTextLabel, k, feature.featureName);
+	string outFile = "FeatureVector.csv";
+	WriteCoherenceMatValues(m_OutputValuesF, outFile);
 
 	waitKey(0);
 	return 0;	
 }
 
+void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec) {
+	unsigned int maxLen = result[0].size();
+	for (int len = 0; len < maxLen; len++) {
+		vector<float> cohVec;
+		for (int cnt = 0; cnt < result.size(); cnt++) {
+			float val = result[cnt].at(len);
+			cohVec.push_back(val);
+		}
+		coherenceVec.push_back(cohVec);
+	}
+}
+
+void WriteCoherenceMatValues(vector<vector<float>>& coherenceVec, string& fileName) {
+	fstream coherenceFPtr;
+	coherenceFPtr.open(fileName, fstream::out);
+	for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {		
+		for (int len = 0; len < coherenceVec[cnt].size(); len++) {
+			coherenceFPtr << coherenceVec[cnt].at(len) << ",";			
+		}
+		coherenceFPtr << endl;		
+	}
+	coherenceFPtr.close();
+
+}
 
 
 /************************************************************
@@ -140,7 +198,7 @@ void DivideTrainTestData(int numberOfTrainSamples,
 					int val = getSafeSamplePoints(newSample, data, samplesPerClass, cnt);
 					if (val == 1) {						
 						data.trainSamples.Samples.push_back(newSample);
-						data.trainSamples.labelName.push_back(data.labelNames[cnt]);
+						data.trainSamples.labelName.push_back(cnt+1);		//data.labelNames[cnt]				
 						trainCnt++;
 					}
 				}
@@ -151,7 +209,7 @@ void DivideTrainTestData(int numberOfTrainSamples,
 					int val = getSafeSamplePoints(newSample, data, samplesPerClass, cnt);
 					if (val == 1) {
 						data.testSamples.Samples.push_back(newSample);
-						data.testSamples.labelName.push_back(data.labelNames[cnt]);
+						data.testSamples.labelName.push_back(cnt+1);			//data.labelNames[cnt]
 						testCnt++;
 					}
 				}				
@@ -177,6 +235,8 @@ int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, in
 		return 0;
 	}
 }
+
+
 
 
 
