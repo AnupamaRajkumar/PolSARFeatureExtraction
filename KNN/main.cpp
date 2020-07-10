@@ -11,6 +11,7 @@
 #include <random>
 #include <algorithm>
 #include <fstream>
+#include <map>
 
 #include "Data.h"
 #include "KNN.h"
@@ -33,8 +34,9 @@ void DivideTrainTestData(int numberOfTrainSamples,
 
 int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, int cnt);
 
-void WriteCoherenceMatValues(vector<vector<float>>& coherenceMat, string& fileName);
-
+void WriteCoherenceMatValues(vector<pair<vector<float>, unsigned char>>& imgData, string& fileName, bool isApp);
+void WriteCoherenceMatValues(vector<vector<float>>& featureVector, string& fileName, bool isApp);
+void calculateMeanFeatureVector(vector<vector<float>>& featureVector, Mat& outPut);
 void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec);
 
 int main(int argc, char** argv)
@@ -58,6 +60,14 @@ int main(int argc, char** argv)
 	kSize = 3;
 	numberOfTrainSamples = 5;
 	numberOfTestSamples = 1;
+	int choice, numOfTrainingSamples, numOfTestSamples;
+
+	ifstream CoherencevecList;
+	string fileName = "CoherenceVectorList.csv";
+	string outFile = "FeatureVector.csv";
+	vector<vector<float>> coherenceVec;
+	vector<pair<vector<float>, unsigned char>> imgData;
+	vector<unsigned char> labelName;
 
 	/*********Function calls****************/
 	//load PolSAR data
@@ -72,11 +82,6 @@ int main(int argc, char** argv)
 	
 	data.loadLabels(argv[3], data.labelImages, data.labelNames, data.numOfPoints);
 	cout << "Labels loaded" << endl;
-
-	ifstream CoherencevecList;
-	string fileName = "CoherenceVectorList.csv";
-	vector<vector<float>> coherenceVec;
-
 	CoherencevecList.open(fileName);
 	if (CoherencevecList) {
 		/*read the contents from file*/
@@ -84,12 +89,17 @@ int main(int argc, char** argv)
 		cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(fileName, 0, -2, 0);
 		Mat data = raw_data->getSamples();
 		for (int row = 0; row < data.rows; row++) {
-			vector<float> colData;
+			vector<float> colData;		
 			for (int col = 0; col < data.cols; col++) {
-				colData.push_back(data.at<float>(row, col));
+				if (col == 0) {
+					labelName.push_back(data.at<int>(row, col));
+				}
+				else {
+					colData.push_back(data.at<float>(row, col));
+				}				
 			}
 			coherenceVec.push_back(colData);
-		}		
+		}
 	}
 	else {
 		//load PolSAR data
@@ -97,39 +107,188 @@ int main(int argc, char** argv)
 		cout << "Data loaded" << endl;
 		cout << "Calculating coherency matrix" << endl;
 		vector<vector<float>> result;
-		feature.GetCoherencyFeatures(data, result);
+		vector<unsigned char> labelMap;
+		feature.GetCoherencyFeatures(data, result, labelMap);
 		ConvertToCoherenceVector(result, coherenceVec);
-		WriteCoherenceMatValues(coherenceVec, fileName);
+		/*create a map of result and label*/
+
+		for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {	
+			pair<vector<float>, unsigned char> val;
+			 val.first = coherenceVec[cnt];
+			 val.second = labelMap[cnt];
+			 imgData.push_back(val);
+		}
+		WriteCoherenceMatValues(imgData, fileName, false);
 	}
 
 	/*autoencoder constructor*/
 	int inputDim, hiddenDim, epoch;
 	double learningRate, momentum;
-	vector<vector<float>> m_OutputValuesF;
-	m_OutputValuesF.reserve(coherenceVec.size());
 	inputDim = coherenceVec[0].size();
 	hiddenDim = 5;
 	learningRate = 0.1;
 	momentum = 1;
-	epoch = 20;
+	epoch = 50;
 	Autoencoder *aeEncoder = new Autoencoder(inputDim, hiddenDim, learningRate, momentum);
-	/*pass the points in coherency vector through autoencoder
-	Here we're calculating features pixel by pixel*/
 
-	for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {	
-		aeEncoder->InitializeWts();
-		aeEncoder->InitializeBias();
-		for (int e = 0; e < epoch; e++) {
-			//cout << "Epoch :" << e + 1 << endl;
-			aeEncoder->train(coherenceVec[cnt], m_OutputValuesF, e, cnt);
+	cout << "---Training menu---" << endl;
+	cout << "1. Train entire image" << endl;
+	cout << "2. Train patches/samples" << endl;
+	cout << "3. Read existing data from a csv" << endl;
+	cout << "Please enter your choice (1/2/3) ?" << endl;
+	cin >> choice;
+	
+	if (choice == 1) {
+			cout << "Training entire image....." << endl;
+			/*pass the points in coherency vector through autoencoder
+			Here we're calculating features pixel by pixel*/
+			int ctr = 1;
+			Mat meanMat;
+			cout << "Starting training...." << endl;
+			for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {
+				aeEncoder->InitializeWts();
+				aeEncoder->InitializeBias();
+				for (int e = 0; e < epoch; e++) {
+					//cout << "Epoch :" << e + 1 << endl;
+					aeEncoder->train(coherenceVec[cnt], e, cnt);
+				}
+				if ((cnt + 1) % 100000 == 0) {
+					cout << cnt + 1 << "Samples trained" << endl;
+					WriteCoherenceMatValues(aeEncoder->m_featureVector, outFile, true);
+					calculateMeanFeatureVector(aeEncoder->m_featureVector, meanMat);
+				}
+			}
+	}
+	else if (choice == 2) {
+		cout << "Please enter the number of samples to be trained under autoencoder:" << endl;
+		cin >> numOfTrainingSamples;
+		//random samples generator
+		std::random_device rd;													 // obtain a random number from hardware
+		std::mt19937 eng(rd());													// seed the generator
+		std::uniform_int_distribution<> distr(0, coherenceVec.size());		   // define the range
+		int start = distr(eng);
+		int end = 0;
+		int ctr = 0;
+		vector<unsigned char> lab;
+		Mat meanMat;
+		int row = 0, col = 0;
+		cout << "Enter number of rows and columns needed (row x col):" << endl;
+		cin >> row >> col;
+		if ((start + numOfTrainingSamples) > coherenceVec.size()) {
+			end = coherenceVec.size();
 		}
+		else {
+			end = start + numOfTrainingSamples;
+		}
+		for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {
+			aeEncoder->InitializeWts();
+			aeEncoder->InitializeBias();
+			for (int e = 0; e < epoch; e++) {
+				//cout << "Epoch :" << e + 1 << endl;
+				aeEncoder->train(coherenceVec[cnt], e, ctr);
+			}
+			ctr++;
+			lab.push_back(labelName[cnt]);
+			if (cnt % 10000 == 0) {
+				cout << cnt << " samples trained" << endl;
+			}
+		}
+
+
+		
+#if 0
+		meanMat = Mat(row, col, CV_32FC1);
+		calculateMeanFeatureVector(aeEncoder->m_featureVector, meanMat);
+
+		/*write to file*/
+		cout << "Writing to file.." << endl;
+		ofstream meanMatPtr;
+		string fileName = "meanMat.csv";
+		meanMatPtr.open(fileName, ofstream::out);
+		for (int row = 0; row < meanMat.rows; row++) {
+			for (int col = 0; col < meanMat.cols; col++) {
+				meanMatPtr << meanMat.at<float>(row, col) << ",";
+			}
+			meanMatPtr << endl;
+		}
+#endif
+
+#if 0
+		/*Generate colormap*/
+		cout << "Generating colormap" << endl;
+		Mat outMat;
+		meanMat.convertTo(meanMat, CV_8UC1);
+		outMat = meanMat.clone();
+		//outMat.convertTo(outMat, CV_32FC3);
+		//applyCustomColorMap(meanMat, outMat);
+		//applyColorMap(meanMat, outMat, COLORMAP_JET);
+		//utils.Visualization(meanMat, outMat);
+		cv::Mat mlookUpTable_8UC1(1, 256, CV_8UC1);
+		for (int i = 0; i < 256; ++i)
+		{
+			mlookUpTable_8UC1.at<uchar>(0, i) = uchar(255 - i);
+		}
+		cv::LUT(meanMat, mlookUpTable_8UC1, outMat);
+		imwrite("PatchColorMap.png", outMat);
+#endif
+	}
+	else if (choice == 3) {
+		cout << "do something..to be completed" << endl;
+	}
+	else {
+		cerr << "Please enter a valid choice" << endl;
+		exit(-1);
 	}
 
-	string outFile = "FeatureVector.csv";
-	WriteCoherenceMatValues(m_OutputValuesF, outFile);
+#if 0
+	cout << "Enter number of training samples per label class" << endl;
+	cin >> numOfTrainingSamples;
+	cout << "Enter the number of test samples per label class" << endl;
+	cin >> numOfTestSamples;
+
+	cout << "Splitting dataset into training and testing.." << endl;
+	//Splitting training and testing data for classification
+	DivideTrainTestData(numberOfTrainSamples, numberOfTestSamples, data);
+
+	cout << "Training samples:" << data.trainSamples.Samples.size() << endl;
+	cout << "Training Labels:" << data.trainSamples.labelName.size() << endl;
+	cout << "Testing samples:" << data.testSamples.Samples.size() << endl;
+	cout << "Testing Labels:" << data.testSamples.labelName.size() << endl;
+#endif
 
 	waitKey(0);
 	return 0;	
+}
+
+
+
+void calculateMeanFeatureVector(vector<vector<float>>& featureVector, Mat& outPut) {
+	vector<float> outVec;
+	for (int cnt = 0; cnt < featureVector.size(); cnt++) {
+		float mean = 0.;
+		for (int s = 0; s < featureVector[cnt].size(); s++) {
+			mean += featureVector[cnt][s];
+			mean /= featureVector[cnt].size();
+		}
+		outVec.push_back(mean);
+	}
+	/*convert vector to Mat*/
+	Mat OutMat;
+	OutMat = Mat::zeros(outPut.rows, outPut.cols, CV_32FC1);
+	if (outVec.size() == outPut.rows * outPut.cols) {
+		memcpy(OutMat.data, outVec.data(), outVec.size()*sizeof(float));
+	}
+	//OutMat.convertTo(OutMat, CV_8UC1);
+	/*scale values of outMat to outPut*/
+	for (int row = 0; row < OutMat.rows; row++) {
+		for (int col = 0; col < OutMat.cols; col++) {
+			float val = OutMat.at<float>(row, col) * 255.0;
+			outPut.at<float>(row, col) = val;
+			//cout << outPut.at<float>(row, col) << " ";
+		}
+		//cout << endl;
+	}
+
 }
 
 void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec) {
@@ -144,14 +303,40 @@ void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float
 	}
 }
 
-void WriteCoherenceMatValues(vector<vector<float>>& coherenceVec, string& fileName) {
-	fstream coherenceFPtr;
-	coherenceFPtr.open(fileName, fstream::out);
-	for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {		
-		for (int len = 0; len < coherenceVec[cnt].size(); len++) {
-			coherenceFPtr << coherenceVec[cnt].at(len) << ",";			
-		}
+void WriteCoherenceMatValues(vector<vector<float>>& featureVector, string& fileName, bool isApp) {
+	ofstream coherenceFPtr;
+	if (!isApp) {
+		coherenceFPtr.open(fileName, ofstream::out);
+	}
+	else {
+		coherenceFPtr.open(fileName, ofstream::out|ofstream::app);
+	}
+	
+	for (int cnt = 0; cnt < featureVector.size(); cnt++) {
+		for (int len = 0; len < featureVector[cnt].size(); len++) {
+			coherenceFPtr << featureVector[cnt].at(len) << ",";
+		}		
 		coherenceFPtr << endl;		
+	}
+	coherenceFPtr.close();
+}
+
+/*override*/
+void WriteCoherenceMatValues(vector<pair<vector<float>, unsigned char>>& imgData, string& fileName, bool isApp) {
+	ofstream coherenceFPtr;
+	if (!isApp) {
+		coherenceFPtr.open(fileName, ofstream::out);
+	}
+	else {
+		coherenceFPtr.open(fileName, ofstream::out | ofstream::app);
+	}
+
+	for (int cnt = 0; cnt < imgData.size(); cnt++) {						
+		coherenceFPtr << (int)imgData[cnt].second << ",";
+		for (int len = 0; len < imgData[cnt].first.size(); len++) {
+			coherenceFPtr << imgData[cnt].first.at(len) << ",";
+		}
+		coherenceFPtr << endl;
 	}
 	coherenceFPtr.close();
 
