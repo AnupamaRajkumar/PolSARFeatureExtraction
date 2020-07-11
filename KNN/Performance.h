@@ -12,7 +12,7 @@ using namespace cv;
 
 class Performance {
 public:
-	double calculatePredictionAccuracy(vector<string>& classResult, vector<string>& testLabels);
+	double calculatePredictionAccuracy(vector<unsigned char>& classResult, vector<unsigned char>& testLabels);
 };
 
 

@@ -27,12 +27,9 @@ namespace fs = std::filesystem;
 
 
 
-void DivideTrainTestData(int numberOfTrainSamples, 
+void DivideTrainTestData(int numberOfTrainSamples,
 						 int numberOfTestSamples,
-						 Data& data);
-
-
-int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, int cnt);
+						 Data& data, int fold);
 
 void WriteCoherenceMatValues(vector<pair<vector<float>, unsigned char>>& imgData, string& fileName, bool isApp);
 void WriteCoherenceMatValues(vector<vector<float>>& featureVector, string& fileName, bool isApp);
@@ -53,14 +50,17 @@ int main(int argc, char** argv)
 	Feature feature;
 	Utils utils;
 	string featureName;
+	int choice, numOfSamples, outChoice;
 	
 
 	/*********Variable Initialization****************/
-	k = 1;
+	k = 20;
 	kSize = 3;
 	numberOfTrainSamples = 5;
 	numberOfTestSamples = 1;
-	int choice, numOfTrainingSamples, numOfTestSamples;
+	numOfSamples = 100;
+	choice = 1;
+	outChoice = 1;
 
 	ifstream CoherencevecList;
 	string fileName = "CoherenceVectorList.csv";
@@ -68,6 +68,7 @@ int main(int argc, char** argv)
 	vector<vector<float>> coherenceVec;
 	vector<pair<vector<float>, unsigned char>> imgData;
 	vector<unsigned char> labelName;
+	vector<unsigned char> lab;
 
 	/*********Function calls****************/
 	//load PolSAR data
@@ -85,19 +86,21 @@ int main(int argc, char** argv)
 	CoherencevecList.open(fileName);
 	if (CoherencevecList) {
 		/*read the contents from file*/
-			//reading data from csv
+		//reading data from csv
 		cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(fileName, 0, -2, 0);
 		Mat data = raw_data->getSamples();
 		for (int row = 0; row < data.rows; row++) {
-			vector<float> colData;		
+			vector<float> colData;	
+			int name;
 			for (int col = 0; col < data.cols; col++) {
 				if (col == 0) {
-					labelName.push_back(data.at<int>(row, col));
+					name = data.at<int>(row, 0);
 				}
 				else {
 					colData.push_back(data.at<float>(row, col));
 				}				
 			}
+			labelName.push_back(name);
 			coherenceVec.push_back(colData);
 		}
 	}
@@ -128,13 +131,13 @@ int main(int argc, char** argv)
 	hiddenDim = 5;
 	learningRate = 0.1;
 	momentum = 1;
-	epoch = 50;
+	epoch = 20;
 	Autoencoder *aeEncoder = new Autoencoder(inputDim, hiddenDim, learningRate, momentum);
 
 	cout << "---Training menu---" << endl;
 	cout << "1. Train entire image" << endl;
 	cout << "2. Train patches/samples" << endl;
-	cout << "3. Read existing data from a csv" << endl;
+	cout << "3. Read Feature Vector from the csv" << endl;
 	cout << "Please enter your choice (1/2/3) ?" << endl;
 	cin >> choice;
 	
@@ -154,14 +157,12 @@ int main(int argc, char** argv)
 				}
 				if ((cnt + 1) % 100000 == 0) {
 					cout << cnt + 1 << "Samples trained" << endl;
-					WriteCoherenceMatValues(aeEncoder->m_featureVector, outFile, true);
-					calculateMeanFeatureVector(aeEncoder->m_featureVector, meanMat);
 				}
 			}
 	}
 	else if (choice == 2) {
 		cout << "Please enter the number of samples to be trained under autoencoder:" << endl;
-		cin >> numOfTrainingSamples;
+		cin >> numOfSamples;
 		//random samples generator
 		std::random_device rd;													 // obtain a random number from hardware
 		std::mt19937 eng(rd());													// seed the generator
@@ -169,16 +170,11 @@ int main(int argc, char** argv)
 		int start = distr(eng);
 		int end = 0;
 		int ctr = 0;
-		vector<unsigned char> lab;
-		Mat meanMat;
-		int row = 0, col = 0;
-		cout << "Enter number of rows and columns needed (row x col):" << endl;
-		cin >> row >> col;
-		if ((start + numOfTrainingSamples) > coherenceVec.size()) {
+		if ((start + numOfSamples) > coherenceVec.size()) {
 			end = coherenceVec.size();
 		}
 		else {
-			end = start + numOfTrainingSamples;
+			end = start + numOfSamples;
 		}
 		for (int cnt = 0; cnt < coherenceVec.size(); cnt++) {
 			aeEncoder->InitializeWts();
@@ -193,27 +189,105 @@ int main(int argc, char** argv)
 				cout << cnt << " samples trained" << endl;
 			}
 		}
+	}
+	else if (choice == 3) {
+		cout << "Reading the feature vector csv..." << endl;
+		ifstream featureFile;
+		featureFile.open(outFile);
+		if (featureFile) {
+			cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(outFile, 0, -2, 0);
+			Mat data = raw_data->getSamples();
+			for (int row = 0; row < data.rows; row++) {
+				vector<float> featureVec;
+				for (int col = 0; col < data.cols; col++) {					
+					featureVec.push_back(data.at<float>(row, col));
+				}
+				aeEncoder->m_featureVector.push_back(featureVec);
+			}
+		}		
+	}
+	else {
+		cerr << "Please enter a valid choice" << endl;
+		exit(-1);
+	}
 
+	cout << "---Operation menu---" << endl;
+	cout << "1. Classify the images" << endl;
+	cout << "2. Visualise the feature vector" << endl;
+	cout << "3. Write the feature vector to csv" << endl;
+	cout << "4. Write the mean matrix to csv" << endl;
+	cout << "5. Visualize the classified image" << endl;
+	cout << "Please enter your choice (1/2/3/4/5) ?" << endl;
+	cin >> outChoice;
 
-		
-#if 0
+	if (outChoice == 1) {
+		vector<Mat> trainVal, testVal;
+		vector<unsigned char> trainLabel, testLabel;
+		cout << "Enter number of training samples per label class" << endl;
+		cin >> numberOfTrainSamples;
+		cout << "Enter the number of test samples per label class" << endl;
+		cin >> numberOfTestSamples;
+
+		cout << "Splitting dataset into training and testing.." << endl;
+		//Splitting training and testing data for classification
+		for (int fold = 0; fold < 5; fold++) {
+			cout << "In " << fold + 1 << "......" << endl;
+			DivideTrainTestData(numberOfTrainSamples, numberOfTestSamples, data, fold);
+
+			cout << "Number of training samples: " << data.trainSamples.Samples.size() << endl;
+			cout << "Number of test samples:" << data.testSamples.Samples.size() << endl;
+			int rSize = 6640;
+			int colSize = 1390;
+			int cnt1 = 0, cnt2 = 0;
+			for (const auto& p : data.trainSamples.Samples) {
+				unsigned int idx = (p.x * colSize) + p.y;
+				//cout << "idx:" << idx;
+				vector<float> fVal = aeEncoder->m_featureVector[idx];
+				/*convert vector to Mat*/
+				Mat fMat;
+				fMat = Mat::zeros(1, fVal.size(), CV_32FC1);
+				memcpy(fMat.data, fVal.data(), fVal.size() * sizeof(float));
+				if (fold > 0) {
+					trainVal.at(cnt1) = fMat;
+					trainLabel.at(cnt1) = data.trainSamples.labelName[cnt1];
+				}
+				else {
+					trainVal.push_back(fMat);
+					trainLabel.push_back(data.trainSamples.labelName[cnt1]);
+				}
+
+				cnt1++;
+			}
+			for (const auto& p : data.testSamples.Samples) {
+				unsigned int idx = (p.x * colSize) + p.y;
+				//cout << "idx:" << idx;
+				vector<float> fVal = aeEncoder->m_featureVector[idx];
+				/*convert vector to Mat*/
+				Mat fMat;
+				fMat = Mat::zeros(1, fVal.size(), CV_32FC1);
+				memcpy(fMat.data, fVal.data(), fVal.size() * sizeof(float));
+				if (fold > 0) {
+					testVal.at(cnt2) = fMat;
+					testLabel.at(cnt2) = data.testSamples.labelName[cnt2];
+				}
+				else {
+					testVal.push_back(fMat);
+					testLabel.push_back(data.testSamples.labelName[cnt2]);
+				}
+				cnt2++;
+			}
+
+			knn.KNNTest(trainVal, trainLabel, testVal, testLabel, k);
+		}
+	}
+	else if (outChoice == 2) {
+		cout << "Visualising the feature vector...." << endl;
+		Mat meanMat;
+		int row = 0, col = 0;
+		cout << "Enter number of rows and columns needed (row x col):" << endl;
+		cin >> row >> col;
 		meanMat = Mat(row, col, CV_32FC1);
 		calculateMeanFeatureVector(aeEncoder->m_featureVector, meanMat);
-
-		/*write to file*/
-		cout << "Writing to file.." << endl;
-		ofstream meanMatPtr;
-		string fileName = "meanMat.csv";
-		meanMatPtr.open(fileName, ofstream::out);
-		for (int row = 0; row < meanMat.rows; row++) {
-			for (int col = 0; col < meanMat.cols; col++) {
-				meanMatPtr << meanMat.at<float>(row, col) << ",";
-			}
-			meanMatPtr << endl;
-		}
-#endif
-
-#if 0
 		/*Generate colormap*/
 		cout << "Generating colormap" << endl;
 		Mat outMat;
@@ -229,32 +303,39 @@ int main(int argc, char** argv)
 			mlookUpTable_8UC1.at<uchar>(0, i) = uchar(255 - i);
 		}
 		cv::LUT(meanMat, mlookUpTable_8UC1, outMat);
-		imwrite("PatchColorMap.png", outMat);
-#endif
+		imwrite("PatchColorMap.png", outMat);	
 	}
-	else if (choice == 3) {
-		cout << "do something..to be completed" << endl;
+	else if (outChoice == 3) {
+		cout << "Writing feature vector to file.." << endl;
+		WriteCoherenceMatValues(aeEncoder->m_featureVector, outFile, true);
+	}
+	else if (outChoice == 4) {
+		/*write to file*/
+		cout << "Writing mean feature values per pixel to file.." << endl;
+		Mat meanMat;
+		int row = 0, col = 0;
+		cout << "Enter number of rows and columns needed (row x col):" << endl;
+		cin >> row >> col;
+		meanMat = Mat(row, col, CV_32FC1);
+		calculateMeanFeatureVector(aeEncoder->m_featureVector, meanMat);
+
+		ofstream meanMatPtr;
+		string fileName = "meanMat.csv";
+		meanMatPtr.open(fileName, ofstream::out);
+		for (int row = 0; row < meanMat.rows; row++) {
+			for (int col = 0; col < meanMat.cols; col++) {
+				meanMatPtr << meanMat.at<float>(row, col) << ",";
+			}
+			meanMatPtr << endl;
+		}		
+	}
+	else if (outChoice == 5) {
+		cout << "Visualising the classified map..." << endl;
 	}
 	else {
-		cerr << "Please enter a valid choice" << endl;
+		cerr << "Incorrect input..exiting" << endl;
 		exit(-1);
 	}
-
-#if 0
-	cout << "Enter number of training samples per label class" << endl;
-	cin >> numOfTrainingSamples;
-	cout << "Enter the number of test samples per label class" << endl;
-	cin >> numOfTestSamples;
-
-	cout << "Splitting dataset into training and testing.." << endl;
-	//Splitting training and testing data for classification
-	DivideTrainTestData(numberOfTrainSamples, numberOfTestSamples, data);
-
-	cout << "Training samples:" << data.trainSamples.Samples.size() << endl;
-	cout << "Training Labels:" << data.trainSamples.labelName.size() << endl;
-	cout << "Testing samples:" << data.testSamples.Samples.size() << endl;
-	cout << "Testing Labels:" << data.testSamples.labelName.size() << endl;
-#endif
 
 	waitKey(0);
 	return 0;	
@@ -278,15 +359,13 @@ void calculateMeanFeatureVector(vector<vector<float>>& featureVector, Mat& outPu
 	if (outVec.size() == outPut.rows * outPut.cols) {
 		memcpy(OutMat.data, outVec.data(), outVec.size()*sizeof(float));
 	}
-	//OutMat.convertTo(OutMat, CV_8UC1);
+
 	/*scale values of outMat to outPut*/
 	for (int row = 0; row < OutMat.rows; row++) {
 		for (int col = 0; col < OutMat.cols; col++) {
 			float val = OutMat.at<float>(row, col) * 255.0;
 			outPut.at<float>(row, col) = val;
-			//cout << outPut.at<float>(row, col) << " ";
 		}
-		//cout << endl;
 	}
 
 }
@@ -352,72 +431,65 @@ Author: Anupama Rajkumar
 *************************************************************/
 void DivideTrainTestData(int numberOfTrainSamples, 
 						 int numberOfTestSamples,
-						 Data& data) {
-	int training_start_idx = int(data.labelImages[0].cols / 5);
+						 Data& data, int fold) {
+	int offset = int(data.labelImages[0].cols / 5);
+	int test_start_idx = int((fold)*offset);
+	int test_end_idx = int((fold + 1)*offset);
+
+	cout << test_start_idx << "," << test_end_idx << endl;
 
 	int trainCnt, testCnt;
 	//random samples generator
-	std::random_device rd;										   // obtain a random number from hardware
-	std::mt19937 eng(rd());										   // seed the generator
-	std::uniform_int_distribution<> distrX(0, data.labelImages[0].rows);		   // define the range
+	std::random_device rd;															// obtain a random number from hardware
+	std::mt19937 eng(rd());															// seed the generator
+	std::uniform_int_distribution<> distrX(0, data.labelImages[0].rows);			// define the range
 	std::uniform_int_distribution<> distrY(0, data.labelImages[0].cols);
-
+	cout << numberOfTrainSamples << " " << numberOfTestSamples << endl;
 	/*The idea is to get a balanced division between all the classes. 
 	5 classes with equal number of points. Also, the first 1/5th region is 
 	reserved for testing data set and from remaining area training samples are taken*/
-	int samplesPerClass = int(numberOfTrainSamples / NUMOFCLASSES);
+	//int samplesPerClass = int(numberOfTrainSamples / NUMOFCLASSES);
 	/*for each class*/
 	for (int cnt = 0; cnt < data.numOfPoints.size(); cnt++) {										
-		trainCnt = 0;
+		trainCnt = 0;	
 		testCnt = 0;
 		/*for each point in each class*/
 		for (int pt = 0; pt < data.numOfPoints[cnt].size(); pt++) {
 			int x = distrX(eng);
 			int y = distrY(eng);
 			Point2i newSample(data.numOfPoints[cnt][pt].x, data.numOfPoints[cnt][pt].y);
-			if (newSample.y > training_start_idx) {
-				//cout << "newsample:" << newSample.x << "x" << newSample.y << endl;
-				//cout << pt << trainCnt << endl;
+			//cout << "newsample:" << newSample.x << "x" << newSample.y << endl;
+			//cout << pt << trainCnt << endl;
+			if ((newSample.y > test_start_idx) && (newSample.y > test_end_idx)) {
 				/*Ensure that the number of points is less than the max points*/
-				if (trainCnt < samplesPerClass) {
-					int val = getSafeSamplePoints(newSample, data, samplesPerClass, cnt);
-					if (val == 1) {						
-						data.trainSamples.Samples.push_back(newSample);
-						data.trainSamples.labelName.push_back(cnt+1);		//data.labelNames[cnt]				
-						trainCnt++;
+				if (trainCnt < numberOfTrainSamples) {
+					if (fold > 0) {
+						data.trainSamples.Samples.at(trainCnt) = newSample;
+						data.trainSamples.labelName.at(trainCnt) = cnt + 1;
+
 					}
+					else {
+						data.trainSamples.Samples.push_back(newSample);
+						data.trainSamples.labelName.push_back(cnt + 1);
+					}	
+					trainCnt++;
 				}
 			}
 			else
 			{
 				if (testCnt < numberOfTestSamples) {
-					int val = getSafeSamplePoints(newSample, data, samplesPerClass, cnt);
-					if (val == 1) {
-						data.testSamples.Samples.push_back(newSample);
-						data.testSamples.labelName.push_back(cnt+1);			//data.labelNames[cnt]
-						testCnt++;
+					if (fold > 0) {
+						data.testSamples.Samples.at(testCnt) = newSample;
+						data.testSamples.labelName.at(testCnt) = cnt + 1;
 					}
-				}				
+					else {
+						data.testSamples.Samples.push_back(newSample);
+						data.testSamples.labelName.push_back(cnt + 1);			
+					}
+					testCnt++;
+				}
 			}
 		}
-	}
-}
-
-
-int getSafeSamplePoints(Point2i samplePoint, Data& data, int samplesPerClass, int cnt) {
-
-	Point2i new_ind;
-	int j_min = samplePoint.x - int(data.sizeOfPatch / 2); 
-	int j_max = samplePoint.x + int(data.sizeOfPatch / 2);
-	int i_min = samplePoint.y - int(data.sizeOfPatch / 2);
-	int i_max = samplePoint.y + int(data.sizeOfPatch / 2);
-	// get rid of the points on the borders
-	if (i_max < data.labelImages[cnt].cols && j_max < data.labelImages[cnt].rows && i_min >= 0 && j_min >= 0) {
-		// get rid of points which are half patch size away from the mask zero area
-			return 1;				
-	}
-	else {
-		return 0;
 	}
 }
 

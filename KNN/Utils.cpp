@@ -108,6 +108,7 @@ Mat_<Vec3f> Utils::visualiseLabels(Mat &image, string& imageName)
 	return result;
 }
 
+
 /***********************************************************************
 A helper function to visualize the maps (label or classified)
 Author : Anupama Rajkumar
@@ -130,6 +131,7 @@ void Utils::Visualization(string& fileName, string& imageName, Size size) {
 	visualiseLabels(img, imageName);
 	cv::waitKey(0);
 }
+
 
 
 /***********************************************************************
@@ -275,7 +277,7 @@ label classes. This map serves as points of reference when trying to classify
 patches
 *************************************************************************/
 
-void Utils::generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat& labelMap) {
+void Utils::generateLabelMap(vector<Mat>& label, Mat& labelMap) {
 	/**********************************
 	Oberpfaffenhofen
 	0 : Unclassified
@@ -291,9 +293,9 @@ void Utils::generateLabelMap(vector<Mat>& label, vector<string>& labelName, Mat&
 		;
 		for (int row = 0; row < label[cnt].rows; row++) {
 			for (int col = 0; col < label[cnt].cols; col++) {
-				if (labelMap.at<float>(row, col) == 0.0f) {
+				if (labelMap.at<unsigned char>(row, col) == 0) {
 					if (label[cnt].at<float>(row, col) > 0.0f) {
-						labelMap.at<float>(row, col) = cnt + 1;		    //class of label
+						labelMap.at<unsigned char>(row, col) = unsigned char(cnt + 1);		    //class of label
 					}
 				}
 			}

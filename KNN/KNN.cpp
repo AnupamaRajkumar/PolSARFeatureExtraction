@@ -14,7 +14,7 @@
 using namespace std;
 using namespace cv;
 
-Utils utils;
+
 Performance perform;
 
 /***********************************************************************
@@ -26,8 +26,8 @@ between the training and test samples
 *************************************************************************/
 
 double KNN::Euclidean(Mat& testVal, Mat& trainVal) {
-	double distance = 0.0;
-	double sum = 0.0;
+	float distance = 0.0;
+	float sum = 0.0;
 	//ensure that the dimensions of testVal and trainVal are same
 	if ((testVal.rows != trainVal.rows) || (testVal.cols != trainVal.cols))
 	{
@@ -39,7 +39,7 @@ double KNN::Euclidean(Mat& testVal, Mat& trainVal) {
 		int col = testVal.cols;
 		for (int i = 0; i < row; i++) {
 			for (int j = 0; j < col; j++) {
-				double diff = testVal.at<float>(i, j) - trainVal.at<float>(i, j);
+				float diff = testVal.at<float>(i, j) - trainVal.at<float>(i, j);
 				sum = sum + pow(diff, 2);
 				distance = sqrt(sum);
 			}
@@ -61,56 +61,61 @@ Description : This function counts the number of classes in k neighborhood
 Based on which class has the highest count, appropriate class is returned
 *************************************************************************/
 
-string KNN::Classify(vector<pair<double, string>>& distVec, int k) {
+unsigned char KNN::Classify(vector<pair<float, unsigned char>>& distVec, int k) {
 	int city, field, forest, grassland, street;
-	vector<pair<int, string>> classType;
+	vector<pair<int, unsigned char>> classType;
 	classType.reserve(NUMOFCLASSES);
 	city = field = forest = grassland = street  = 0;
 	
 	for (int i = 0; i < k; i++) {	
-		if (distVec[i].second == "city_inter")
+		/*city*/
+		if (distVec[i].second == 1)
 		{
 			city++;
 		}  
-		else if (distVec[i].second == "field_inter")
+		/*Field*/
+		else if (distVec[i].second == 2)
 		{
 			field++;
 		}
-		else if (distVec[i].second == "forest_inter")
+		/*Forest*/
+		else if (distVec[i].second == 3)
 		{
 			forest++;
 		}
-		else if (distVec[i].second == "grassland_inter")
+		/*Grassland*/
+		else if (distVec[i].second == 4)
 		{
 			grassland;
 		}
-		else if (distVec[i].second == "street_inter")
+		/*Street*/
+		else if (distVec[i].second == 5)
 		{
 			street;
 		}
 	}
 	for (int cnt = 0; cnt < (NUMOFCLASSES); cnt++) {
-		pair<int, string> classCnt;
+		pair<int, unsigned char> classCnt;
 		switch (cnt) {
 		case 0:
 			classCnt.first = city;
-			classCnt.second = "city_inter";
+			classCnt.second = 1;
 			break;
 		case 1:
 			classCnt.first = field;
-			classCnt.second = "field_inter";
+			classCnt.second = 2;
 			break;
 		case 2:
 			classCnt.first = forest;
-			classCnt.second = "forest_inter";
+			classCnt.second = 3;
 			break;
 		case 3:
 			classCnt.first = grassland;
-			classCnt.second = "grassland_inter";
+			classCnt.second = 4;
 			break;
 		case 4:
 			classCnt.first = street;
-			classCnt.second = "street_inter";
+			classCnt.second = 5;
 			break;
 		default:
 			cout << "Invalid classification";
@@ -121,7 +126,7 @@ string KNN::Classify(vector<pair<double, string>>& distVec, int k) {
 	
 	//sort in descending order
 	sort(classType.begin(), classType.end(), greater());
-	string classifier;
+	unsigned char classifier;
 	classifier = classType[0].second;
 
 	return classifier;
@@ -136,16 +141,16 @@ Date : 12.06.2020
 Description: Classify test points using KNN Classifier
 *************************************************************************/
 
-void KNN::KNNTest(vector<Mat>& trainVal, vector<string>& trainLabels, 
-				  vector<Mat>& testVal, vector<string>& testLabels, 
-				  int k, string& featureName) {
+void KNN::KNNTest(vector<Mat>& trainVal, vector<unsigned char>& trainLabels, 
+				  vector<Mat>& testVal, vector<unsigned char>& testLabels, 
+				  int k) {
 	/*for each sample in the testing data, caculate distance from each training sample */
-	vector<string> classResult;
+	vector<unsigned char> classResult;
 	Feature f;
 	for (int i = 0; i < testVal.size(); i++) {								//for each test sample
-		vector<pair<double, string>> distVec;
+		vector<pair<float, unsigned char>> distVec;
 		for (int j = 0; j < trainVal.size(); j++) {							//for every training sample
-			pair<double, string> dist;		
+			pair<float, unsigned char> dist;		
 			dist.first = this->Euclidean(testVal[i], trainVal[j]);			//calculate euclidean distance
 			dist.second = trainLabels[j];
 			distVec.push_back(dist);
@@ -153,15 +158,16 @@ void KNN::KNNTest(vector<Mat>& trainVal, vector<string>& trainLabels,
 		//sort the distance in the ascending order
 		sort(distVec.begin(), distVec.end());
 		//classify for each row the label patch
-		string classVal = this->Classify(distVec, k);
+		unsigned char classVal = this->Classify(distVec, k);
 		//cout << "Feature point classified as " << classVal << endl;
 		classResult.push_back(classVal);
 	}	
-	double accuracy = perform.calculatePredictionAccuracy(classResult, testLabels);
+	float accuracy = perform.calculatePredictionAccuracy(classResult, testLabels);
 	cout << "Accuracy: " << accuracy << endl;
 	//log the calculated accuracy
-	cout << "feature name:" << featureName << endl;
-	utils.WriteToFile(k, accuracy, trainVal.size(), testVal.size(), featureName);
+	//cout << "feature name:" << featureName << endl;
+	//Utils utils;
+	//utils.WriteToFile(k, accuracy, trainVal.size(), testVal.size(), featureName);
 }
 
 
