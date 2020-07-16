@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <opencv2/opencv.hpp>
+#include <random>
 
 using namespace std;
 using namespace cv;
@@ -332,39 +333,148 @@ void Utils::VisualizationImages(Size size) {
 }
 
 
-
-/**
- * @brief Moving average filter (aka box filter)
- * @param src Input image
- * @param kSize Window size used by local average
- * @returns Filtered image
- */
-
-void Utils::getAverageFilter(vector<Mat>& trainTexture, vector<Mat>& filtTrainText, int kSize) {
-	
-	int midWay = kSize / 2;
-	int rows = trainTexture.size();
-	int cols = trainTexture[0].cols;
-	cout << rows << "x" << cols << endl;
-	vector<Mat> filtTrain;
-	for (int i = 0; i < rows; i++) {
-		Mat v1;
-		for (int j = 0; j < cols; j++) {
-			double avg = 0.0f;
-			int numOfElements = 0;
-			for (int r = (i - midWay); r < i + midWay; r++) {
-				for (int c = (j - midWay); c < (j + midWay); c++) {
-					//if out of bounds, ignore
-					if (r < 0 || r >= trainTexture.size() || c < 0 || c > trainTexture[i].cols)
-						continue;
-					avg += trainTexture[i].at<float>(r,c);
-					numOfElements++;
-				}
-			}
-			avg = avg / numOfElements;
-			v1.push_back(avg);
+void Utils::calculateMeanFeatureVector(vector<vector<float>>& featureVector, Mat& outPut) {
+	vector<float> outVec;
+	for (int cnt = 0; cnt < featureVector.size(); cnt++) {
+		float mean = 0.;
+		for (int s = 0; s < featureVector[cnt].size(); s++) {
+			mean += featureVector[cnt][s];
+			mean /= featureVector[cnt].size();
 		}
-		filtTrain.push_back(v1);	
+		outVec.push_back(mean);
+	}
+	/*convert vector to Mat*/
+	Mat OutMat;
+	OutMat = Mat::zeros(outPut.rows, outPut.cols, CV_32FC1);
+	if (outVec.size() == outPut.rows * outPut.cols) {
+		memcpy(OutMat.data, outVec.data(), outVec.size() * sizeof(float));
 	}
 
+	/*scale values of outMat to outPut*/
+	for (int row = 0; row < OutMat.rows; row++) {
+		for (int col = 0; col < OutMat.cols; col++) {
+			float val = OutMat.at<float>(row, col) * 255.0;
+			outPut.at<float>(row, col) = val;
+		}
+	}
+
+}
+
+void Utils::ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec) {
+	unsigned int maxLen = result[0].size();
+	for (int len = 0; len < maxLen; len++) {
+		vector<float> cohVec;
+		for (int cnt = 0; cnt < result.size(); cnt++) {
+			float val = result[cnt].at(len);
+			cohVec.push_back(val);
+		}
+		coherenceVec.push_back(cohVec);
+	}
+}
+
+void Utils::WriteCoherenceMatValues(vector<vector<float>>& featureVector, string& fileName, bool isApp) {
+	ofstream coherenceFPtr;
+	if (!isApp) {
+		coherenceFPtr.open(fileName, ofstream::out);
+	}
+	else {
+		coherenceFPtr.open(fileName, ofstream::out | ofstream::app);
+	}
+
+	for (int cnt = 0; cnt < featureVector.size(); cnt++) {
+		for (int len = 0; len < featureVector[cnt].size(); len++) {
+			coherenceFPtr << featureVector[cnt].at(len) << ",";
+		}
+		coherenceFPtr << endl;
+	}
+	coherenceFPtr.close();
+}
+
+/*override*/
+void Utils::WriteCoherenceMatValues(vector<pair<vector<float>, unsigned char>>& imgData, string& fileName, bool isApp) {
+	ofstream coherenceFPtr;
+	if (!isApp) {
+		coherenceFPtr.open(fileName, ofstream::out);
+	}
+	else {
+		coherenceFPtr.open(fileName, ofstream::out | ofstream::app);
+	}
+
+	for (int cnt = 0; cnt < imgData.size(); cnt++) {
+		coherenceFPtr << (int)imgData[cnt].second << ",";
+		for (int len = 0; len < imgData[cnt].first.size(); len++) {
+			coherenceFPtr << imgData[cnt].first.at(len) << ",";
+		}
+		coherenceFPtr << endl;
+	}
+	coherenceFPtr.close();
+
+}
+
+
+/************************************************************
+Dividing the data samples into training and test samples
+Take some training samples for each class and same for
+test samples
+Date: 11.06.2020
+Author: Anupama Rajkumar
+*************************************************************/
+void Utils::DivideTrainTestData(int numberOfTrainSamples, int numberOfTestSamples, Data& data, int fold) {
+	int offset = int(data.labelImages[0].cols / 5);
+	int test_start_idx = int((fold)*offset);
+	int test_end_idx = int((fold + 1)*offset);
+
+	cout << test_start_idx << "," << test_end_idx << endl;
+	numberOfTestSamples = (int)(0.2 * numberOfTrainSamples);
+
+	int trainCnt, testCnt;
+	//random samples generator
+	std::random_device rd;															// obtain a random number from hardware
+	std::mt19937 eng(rd());															// seed the generator
+	std::uniform_int_distribution<> distrX(0, data.labelImages[0].rows);			// define the range
+	std::uniform_int_distribution<> distrY(0, data.labelImages[0].cols);
+	cout << numberOfTrainSamples << " " << numberOfTestSamples << endl;
+	/*The idea is to get a balanced division between all the classes.
+	5 classes with equal number of points. Also, the first 1/5th region is
+	reserved for testing data set and from remaining area training samples are taken*/
+	//int samplesPerClass = int(numberOfTrainSamples / NUMOFCLASSES);
+	/*for each class*/
+	data.trainSamples.Samples.clear();
+	data.trainSamples.labelName.clear();
+	data.testSamples.Samples.clear();
+	data.testSamples.labelName.clear();
+
+	for (int cnt = 0; cnt < data.numOfPoints.size(); cnt++) {
+		trainCnt = 0;
+		testCnt = 0;
+		/*for each point in each class*/
+		for (int pt = 0; pt < data.numOfPoints[cnt].size(); pt++) {
+			int x = distrX(eng);
+			int y = distrY(eng);
+			Point2i newSample(data.numOfPoints[cnt][pt].x, data.numOfPoints[cnt][pt].y);
+			//cout << "newsample:" << newSample.x << "x" << newSample.y << endl;
+			//cout << pt << trainCnt << endl;
+			if ((newSample.y > test_start_idx) && (newSample.y < test_end_idx)) {
+				if (testCnt < numberOfTestSamples) {
+					data.testSamples.Samples.push_back(newSample);
+					data.testSamples.labelName.push_back(cnt + 1);
+					testCnt++;
+				}
+				if (trainCnt < numberOfTrainSamples) {
+					data.trainSamples.Samples.push_back(newSample);
+					data.trainSamples.labelName.push_back(cnt + 1);
+					trainCnt++;
+				}
+			}
+			/*else
+			{
+				//Ensure that the number of points is less than the max points
+				if (trainCnt < numberOfTrainSamples) {
+					data.trainSamples.Samples.push_back(newSample);
+					data.trainSamples.labelName.push_back(cnt + 1);
+					trainCnt++;
+				}
+			}*/
+		}
+	}
 }

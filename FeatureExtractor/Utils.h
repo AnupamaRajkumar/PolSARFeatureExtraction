@@ -4,6 +4,7 @@
 
 #include<iostream>
 #include<opencv2/opencv.hpp>
+#include "Data.h"
 
 using namespace std;
 using namespace cv;
@@ -14,13 +15,16 @@ class Utils {
 		map<string, Vec3f> loadLabelsMetadata();
 		Mat_<Vec3f> visualiseLabels(Mat &image, string& imageName);
 		void Visualization(string& fileName, string& imageName, Size size);
-		void Visualization(Mat& inputImg, Mat& outputImg);
 		void GetLabelPatchIndex(int sizeOfPatch, Point2i samplePoints, Mat& LabelMap, int& pStart_r, int& pStart_c, int& pEnd_r, int& pEnd_c);
 		void DisplayClassName(int finalClass);
 		void VisualizationImages(Size size);
 		void generateLabelMap(vector<Mat>& label, Mat& labelMap);
 		void generateTestLabel(vector<Mat>& label, vector<string>& labelName, Mat& labelMap, int cnt);
-		void getAverageFilter(vector<Mat>& trainTexture, vector<Mat>& filtTrainText, int kSize);
+		void DivideTrainTestData(int numberOfTrainSamples,int numberOfTestSamples,Data& data, int fold);
+		void WriteCoherenceMatValues(vector<pair<vector<float>, unsigned char>>& imgData, string& fileName, bool isApp);
+		void WriteCoherenceMatValues(vector<vector<float>>& featureVector, string& fileName, bool isApp);
+		void calculateMeanFeatureVector(vector<vector<float>>& featureVector, Mat& outPut);
+		void ConvertToCoherenceVector(vector<vector<float>>& result, vector<vector<float>>& coherenceVec);
 
 };
 #endif

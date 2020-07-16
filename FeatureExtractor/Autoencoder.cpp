@@ -7,6 +7,11 @@
 using namespace std;
 using namespace cv;
 
+
+Autoencoder::Autoencoder() {
+	/*do nothing*/
+}
+
 /*
 Written by : Anupama Rajkumar
 Date : 25.06.2020
@@ -121,7 +126,7 @@ void Autoencoder::feedforward(vector<float>& m_hiddenValues, vector<float>& m_ou
 			total += m_encoderWt[i][j] * m_inputValues[j];	
 		}
 		/*assign this value to hiddenvalue after passing through activation	
-		activation function used: sigmoid*/		
+		activation function used: linear*/		
 		total += m_hiddenBias[i];						//(W*x + b)
 		m_hiddenValues.push_back(this->sigmoid(total));
 	}
@@ -148,7 +153,7 @@ void Autoencoder::backpropagate(vector<float>& m_hiddenValues, vector<float>& m_
 	/*for each output value - from outputlayer to hiddenlayer*/
 	for (auto i = 0; i < m_dataDimension; i++) {
 		vector<float> wtChanges;
-		float delta = (m_outputValues[i] - m_inputValues[i])*m_outputValues[i];		// this->sigmoidDerivation(m_outputValues[i]);
+		float delta = (m_outputValues[i] - m_inputValues[i])*m_outputValues[i];		
 		m_deltas.at(i) = delta;
 	}
 
@@ -224,18 +229,21 @@ float Autoencoder::sigmoidDerivation(float d) {
 	return d * (1.0 - d);
 }
 
-void Autoencoder::train(vector<float>& data, int& epoch, int& cnt) {
-	m_featureVector.clear();
-	m_outputVector.clear();
+void Autoencoder::train(vector<float>& data, int& cnt, int& epoch) {
 	m_inputValues = data;
 	vector<float> m_hiddenValues;
 	vector<float> m_outputValues;
 	this->feedforward(m_hiddenValues, m_outputValues);
 	this->backpropagate(m_hiddenValues, m_outputValues);
-
 	/*writing the output value to a map*/
-	m_featureVector.push_back(m_hiddenValues);
-	m_outputVector.push_back(m_outputValues);
+	if (epoch > 0) {
+		m_featureVector.at(cnt) = m_hiddenValues;
+		m_outputVector.at(cnt) = m_outputValues;
+	}
+	else {
+		m_featureVector.push_back(m_hiddenValues);
+		m_outputVector.push_back(m_outputValues);
+	}
 
 	float loss = 0.;
 #if 0
@@ -279,6 +287,27 @@ float Autoencoder::reLUDerivation(float d) {
 	}
 	else {
 		return 1;
+	}
+}
+
+void Autoencoder::SaveParameters(vector<vector<float>>& encoderWt, vector<float>& outputBias)
+{
+	encoderWt = m_encoderWt;
+	outputBias = m_outputBias;
+}
+
+void Autoencoder::ReconstructOutput(vector<vector<float>>& encoderWt, vector<float>& outputBias, vector<float>& input, vector<float>& output)
+{
+	output.clear();
+	for (auto i = 0; i < m_dataDimension; i++) {
+		float total = 0.0;
+		for (auto j = 0; j < m_hiddenDimension; j++) {
+			total += encoderWt[j][i] * input[j];			//decoder wt is transpose of encoder wt
+		}
+		/*assign this value to output after passing through activation
+		activation function used: sigmoid*/
+		total += outputBias[i];						//(W'*x + b)
+		output.push_back(total);
 	}
 }
 

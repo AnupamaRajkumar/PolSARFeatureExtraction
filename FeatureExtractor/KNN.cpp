@@ -35,15 +35,14 @@ double KNN::Euclidean(Mat& testVal, Mat& trainVal) {
 		exit(-1);
 	}
 	else {
-		int row = testVal.rows;
-		int col = testVal.cols;
-		for (int i = 0; i < row; i++) {
-			for (int j = 0; j < col; j++) {
-				float diff = testVal.at<float>(i, j) - trainVal.at<float>(i, j);
-				sum = sum + pow(diff, 2);
+		Mat difference = Mat::zeros(testVal.size(), testVal.type());
+		difference =  testVal - trainVal;
+		for (int row = 0; row < difference.rows; row++) {
+			for (int col = 0; col < difference.cols; col++) {
+				sum = sum + pow(difference.at<float>(row, col), 2);
 				distance = sqrt(sum);
 			}
-		}
+		}		
 	}
 
 	//cout << "distance = " << distance;
