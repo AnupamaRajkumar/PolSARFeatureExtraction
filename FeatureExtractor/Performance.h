@@ -12,6 +12,7 @@ using namespace cv;
 
 class Performance {
 public:
+	double calculatePredictionAccuracy(vector<unsigned char>& classResult, vector<unsigned char>& testLabels, vector<pair<vector<Point2i>, uint>>& patchPoint);
 	double calculatePredictionAccuracy(vector<unsigned char>& classResult, vector<unsigned char>& testLabels);
 };
 

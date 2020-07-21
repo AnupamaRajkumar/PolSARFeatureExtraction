@@ -77,7 +77,7 @@ Mat_<Vec3f> Utils::visualiseLabels(Mat &image, string& imageName)
 		for (int col = 0; col < image.cols; col++) {
 			Vec3f color;
 			// Take every point and assign the right color in the result Mat
-			int val = image.at<float>(row, col);
+			int val = image.at<int>(row, col);
 			switch (val) {
 			case 0:
 				color = colors["unclassified"];
@@ -110,6 +110,46 @@ Mat_<Vec3f> Utils::visualiseLabels(Mat &image, string& imageName)
 }
 
 
+void Utils::visualiseLabelsF(Mat &image, string& imageName)
+{
+	map<string, Vec3f> colors = loadLabelsMetadata();
+
+	Mat result = Mat(image.rows, image.cols, CV_32FC3, Scalar(255.0f, 255.0f, 255.0f));
+	// Create the output result;
+	for (int row = 0; row < image.rows; row++) {
+		for (int col = 0; col < image.cols; col++) {
+			Vec3f color;
+			// Take every point and assign the right color in the result Mat
+			int val = image.at<float>(row, col);
+			switch (val) {
+			case 0:
+				color = colors["unclassified"];
+				break;
+			case 1:
+				color = colors["city"];
+				break;
+			case 2:
+				color = colors["field"];
+				break;
+			case 3:
+				color = colors["forest"];
+				break;
+			case 4:
+				color = colors["grassland"];
+				break;
+			case 5:
+				color = colors["street"];
+				break;
+			default:
+				cout << "Wrong value" << endl;
+				break;
+			}
+			result.at<Vec3f>(row, col) = color;
+		}
+	}
+	imwrite(imageName, result);
+}
+
 /***********************************************************************
 A helper function to visualize the maps (label or classified)
 Author : Anupama Rajkumar
@@ -124,12 +164,20 @@ void Utils::Visualization(string& fileName, string& imageName, Size size) {
 	//reading data from csv
 	cv::Ptr<cv::ml::TrainData> raw_data = cv::ml::TrainData::loadFromCSV(fileName, 0, -1, -1);
 	cv::Mat data = raw_data->getSamples();
+#if 0 
+	for (int row = 0; row < data.rows; row++) {
+		for (int col = 0; col < data.cols; col++) {
+			cout << data.at<float>(row, col) << " ";
+		}
+		cout << endl;
+	}
+#endif
 	// optional if you have a color image and not just raw data
 	data.convertTo(img, CV_32FC1);
 	// set the image size
 	cv::resize(img, img, size);
 	//visualize the map
-	visualiseLabels(img, imageName);
+	visualiseLabelsF(img, imageName);
 	cv::waitKey(0);
 }
 
@@ -411,6 +459,63 @@ void Utils::WriteCoherenceMatValues(vector<pair<vector<float>, unsigned char>>& 
 
 }
 
+vector<pair<vector<Point2i>, uint>> Utils::GetPatchPoints(int patchIdx, Data& data) {
+	int offset = int(data.labelImages[0].cols / MAXNUMOFPATCHES);
+	int start_idx = int((patchIdx)*offset);
+	int end_idx = int((patchIdx + 1)*offset);
+
+
+	vector<pair<vector<Point2i>, uint>> patchPoint;
+
+	for (int cnt = 0; cnt < data.numOfPoints.size(); cnt++) {
+		/*for each point in each class*/
+		//cout << "cnt :" << cnt << endl;
+		vector<Point2i> point;
+		pair<vector<Point2i>, uint> pPt;
+		for (int len = 0; len < data.numOfPoints[cnt].size(); len++) {
+			/*if the point lies within the patch*/			
+			Point2i newPoint(data.numOfPoints[cnt][len].x, data.numOfPoints[cnt][len].y);
+			if ((newPoint.y > start_idx) && (newPoint.y <= end_idx)) {	
+				point.push_back(newPoint);
+			}
+		}
+		pPt.first = point;
+		pPt.second = cnt + 1;
+		patchPoint.push_back(pPt);
+		cout << cnt + 1 << ": "<< patchPoint[cnt].first.size() << endl;
+	}
+	return patchPoint;
+}
+
+void Utils::DivideTrainTestData2(Data& data, int fold) {
+	int offset = int(data.labelImages[0].cols / 5);
+	int start_idx = int((fold)*offset);
+	int end_idx = int((fold + 1)*offset);
+
+	/*for each class*/
+	data.trainSamples.Samples.clear();
+	data.trainSamples.labelName.clear();
+	data.testSamples.Samples.clear();
+	data.testSamples.labelName.clear();
+
+	for (int cnt = 0; cnt < data.numOfPoints.size(); cnt++) {
+		/*for each point in each class*/
+		//cout << "cnt :" << cnt << endl;
+		for (int len = 0; len < data.numOfPoints[cnt].size(); len++) {
+			/*if the point lies within the patch*/
+			Point2i newPoint(data.numOfPoints[cnt][len].x, data.numOfPoints[cnt][len].y);
+			if ((newPoint.y >= start_idx) && (newPoint.y < end_idx)) {
+				data.testSamples.Samples.push_back(newPoint);
+				data.testSamples.labelName.push_back(cnt + 1);
+			}
+			else {
+				data.trainSamples.Samples.push_back(newPoint);
+				data.trainSamples.labelName.push_back(cnt + 1);
+			}
+		}
+	}
+}
+
 
 /************************************************************
 Dividing the data samples into training and test samples
@@ -419,62 +524,77 @@ test samples
 Date: 11.06.2020
 Author: Anupama Rajkumar
 *************************************************************/
-void Utils::DivideTrainTestData(int numberOfTrainSamples, int numberOfTestSamples, Data& data, int fold) {
-	int offset = int(data.labelImages[0].cols / 5);
-	int test_start_idx = int((fold)*offset);
-	int test_end_idx = int((fold + 1)*offset);
-
-	cout << test_start_idx << "," << test_end_idx << endl;
-	numberOfTestSamples = (int)(0.2 * numberOfTrainSamples);
+void Utils::DivideTrainTestData(Data& data, int fold, int patchIdx) {
+	int patchOffset = int(data.labelImages[0].cols / MAXNUMOFPATCHES);
+	int pStartIdx = int((patchIdx)*patchOffset);
+	int pEndIdx = int((patchIdx + 1)*patchOffset);
 
 	int trainCnt, testCnt;
-	//random samples generator
-	std::random_device rd;															// obtain a random number from hardware
-	std::mt19937 eng(rd());															// seed the generator
-	std::uniform_int_distribution<> distrX(0, data.labelImages[0].rows);			// define the range
-	std::uniform_int_distribution<> distrY(0, data.labelImages[0].cols);
-	cout << numberOfTrainSamples << " " << numberOfTestSamples << endl;
-	/*The idea is to get a balanced division between all the classes.
-	5 classes with equal number of points. Also, the first 1/5th region is
-	reserved for testing data set and from remaining area training samples are taken*/
-	//int samplesPerClass = int(numberOfTrainSamples / NUMOFCLASSES);
+	int start_idx = 0;
+	int end_idx = 0;
+	int offset = 0; 
+
+	offset = int(patchOffset / 5);
+	start_idx = int(fold * offset) + pStartIdx;
+	end_idx = int((fold + 1)*offset) + pStartIdx;
+
 	/*for each class*/
 	data.trainSamples.Samples.clear();
 	data.trainSamples.labelName.clear();
 	data.testSamples.Samples.clear();
 	data.testSamples.labelName.clear();
 
-	for (int cnt = 0; cnt < data.numOfPoints.size(); cnt++) {
-		trainCnt = 0;
-		testCnt = 0;
+	cout << pStartIdx << "," << pEndIdx << "," << start_idx << ","  << end_idx << endl;
+
+	for (int cnt1 = 0; cnt1 < data.numOfPoints.size(); cnt1++) {
 		/*for each point in each class*/
-		for (int pt = 0; pt < data.numOfPoints[cnt].size(); pt++) {
-			int x = distrX(eng);
-			int y = distrY(eng);
-			Point2i newSample(data.numOfPoints[cnt][pt].x, data.numOfPoints[cnt][pt].y);
-			//cout << "newsample:" << newSample.x << "x" << newSample.y << endl;
-			//cout << pt << trainCnt << endl;
-			if ((newSample.y > test_start_idx) && (newSample.y < test_end_idx)) {
-				if (testCnt < numberOfTestSamples) {
-					data.testSamples.Samples.push_back(newSample);
-					data.testSamples.labelName.push_back(cnt + 1);
-					testCnt++;
+		for (int len = 0; len < data.numOfPoints[cnt1].size(); len++) {
+			/*if the point lies within the patch*/
+			Point2i newPoint(data.numOfPoints[cnt1][len].x, data.numOfPoints[cnt1][len].y);
+			if ((newPoint.y >= pStartIdx) && (newPoint.y < pEndIdx)) {
+				if ((newPoint.y >= start_idx) && (newPoint.y < end_idx)) {
+					data.testSamples.Samples.push_back(newPoint);
+					data.testSamples.labelName.push_back(cnt1+1);
 				}
-				if (trainCnt < numberOfTrainSamples) {
-					data.trainSamples.Samples.push_back(newSample);
-					data.trainSamples.labelName.push_back(cnt + 1);
-					trainCnt++;
-				}
+				else {
+					data.trainSamples.Samples.push_back(newPoint);
+					data.trainSamples.labelName.push_back(cnt1+1);
+				}					
 			}
-			/*else
-			{
-				//Ensure that the number of points is less than the max points
-				if (trainCnt < numberOfTrainSamples) {
-					data.trainSamples.Samples.push_back(newSample);
-					data.trainSamples.labelName.push_back(cnt + 1);
-					trainCnt++;
-				}
-			}*/
 		}
 	}
 }
+
+void Utils::DivideTrainTestData(Data& data, int fold, vector<pair<vector<Point2i>, uint>> patchPoint) {
+	int trainCnt, testCnt;
+	int start_idx = 0;
+	int end_idx = 0;
+	int offset = 0;
+
+	/*for each class*/
+	data.trainSamples.Samples.clear();
+	data.trainSamples.labelName.clear();
+	data.testSamples.Samples.clear();
+	data.testSamples.labelName.clear();
+
+	/*4/5th in training set, 1/5th in test set*/
+	for (int cnt1 = 0; cnt1 < patchPoint.size(); cnt1++) {
+		/*for each point in each class*/
+		for (int len = 0; len < patchPoint[cnt1].first.size(); len++) {
+			offset = patchPoint[cnt1].first.size() / 5;
+			start_idx = int(fold*offset);
+			end_idx = int((fold + 1)*offset);
+			//cout << start_idx << "," << end_idx << endl;
+			Point2i newPoint(patchPoint[cnt1].first[len].x, patchPoint[cnt1].first[len].y);
+			if ((len >= start_idx) && (len < end_idx)) {
+				data.testSamples.Samples.push_back(newPoint);
+				data.testSamples.labelName.push_back(patchPoint[cnt1].second);
+			}
+			else {
+				data.trainSamples.Samples.push_back(newPoint);
+				data.trainSamples.labelName.push_back(patchPoint[cnt1].second);
+			}
+		}
+	}
+}
+

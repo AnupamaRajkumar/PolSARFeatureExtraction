@@ -2,16 +2,21 @@
 #include <opencv2/opencv.hpp>
 #include <random>
 #include <fstream>
+#include <numeric>
 
 #include "Autoencoder.h"
-#include "StackedAutoencoder.h"
+//#include "StackedAutoencoder.h"
 #include "KNN.h"
 #include "Utils.h"
+#include "Performance.h"
 
 
 using namespace std;
 using namespace cv;
 namespace fs = std::filesystem;
+
+void CalculateClassification(bool isAE, Data& data, Utils& utils, int k,
+	Autoencoder& aeEncoder, KNN knn, Performance perform);
 
 void Autoencoder::AutoencoderUserMenu(vector<vector<float>>& coherenceVec, Data& data) {
 
@@ -22,6 +27,7 @@ void Autoencoder::AutoencoderUserMenu(vector<vector<float>>& coherenceVec, Data&
 
 	KNN knn;
 	Utils utils;
+	Performance perform;
 
 
 	choice = 1;
@@ -31,7 +37,7 @@ void Autoencoder::AutoencoderUserMenu(vector<vector<float>>& coherenceVec, Data&
 	numberOfTestSamples = 1;
 	string outFile = "FeatureVector.csv";
 	string stackedFile = "StackedFeatureVector.csv";
-	k = 20;
+	k = 1;
 
 	/*vanilla autoencoder hyperparameters*/
 	int inputDim, hiddenDim, hiddenDim1, hiddenDim2, epoch, epoch2;
@@ -47,7 +53,7 @@ void Autoencoder::AutoencoderUserMenu(vector<vector<float>>& coherenceVec, Data&
 	epoch2 = 100;
 	Autoencoder *aeEncoder = new Autoencoder(inputDim, hiddenDim, learningRate1, momentum);
 	Autoencoder *aeEncoder2 = new Autoencoder(hiddenDim, hiddenDim2, learningRate2, momentum);
-	StackedAE *stackedAE = new StackedAE(inputDim, hiddenDim1, hiddenDim2, learningRate1, momentum);
+	//StackedAE *stackedAE = new StackedAE(inputDim, hiddenDim1, hiddenDim2, learningRate1, momentum);
 
 
 	cout << "---Autoencoder Training Menu---" << endl;
@@ -182,62 +188,15 @@ void Autoencoder::AutoencoderUserMenu(vector<vector<float>>& coherenceVec, Data&
 	cout << "6. Visualise the stacked AE feature vector" << endl;
 	cout << "7. Visualize the classified image" << endl;
 	cout << "8. Classify the stacked AE images" << endl;
-	cout << "Please enter your choice (1/2/3/4/5/6/7/8) ?" << endl;
+	cout << "9. Visualise the classified image" << endl;
+	cout << "Please enter your choice (1/2/3/4/5/6/7/8/9) ?" << endl;
 	cin >> outChoice;
 
 	if (outChoice == 1) {
-		vector<Mat> trainVal, testVal;
-		vector<unsigned char> trainLabel, testLabel;
-		cout << "Enter number of training samples per label class" << endl;
-		cin >> numberOfTrainSamples;
-		//cout << "Enter the number of test samples per label class" << endl;
-		//cin >> numberOfTestSamples;
-
-		cout << "Splitting dataset into training and testing.." << endl;
-		//Splitting training and testing data for classification
-		for (int fold = 0; fold < 5; fold++) {
-			cout << "In " << fold + 1 << "......" << endl;
-			utils.DivideTrainTestData(numberOfTrainSamples, numberOfTestSamples, data, fold);
-
-			cout << "Number of training samples: " << data.trainSamples.Samples.size() << endl;
-			cout << "Number of test samples:" << data.testSamples.Samples.size() << endl;
-			int rSize = 6640;
-			int colSize = 1390;
-
-			/*****resetting vectors and variables***********/
-			int cnt1 = 0, cnt2 = 0;
-			trainVal.clear();
-			trainLabel.clear();
-			testVal.clear();
-			testLabel.clear();
-
-			for (const auto& p : data.trainSamples.Samples) {
-				unsigned int idx = (p.x * colSize) + p.y;
-				//cout << "idx:" << idx;
-				vector<float> fVal = aeEncoder->m_featureVector[idx];
-				/*convert vector to Mat*/
-				Mat fMat;
-				fMat = Mat::zeros(1, fVal.size(), CV_32FC1);
-				memcpy(fMat.data, fVal.data(), fVal.size() * sizeof(float));
-				trainVal.push_back(fMat);
-				trainLabel.push_back(data.trainSamples.labelName[cnt1]);
-				cnt1++;
-			}
-			for (const auto& p : data.testSamples.Samples) {
-				unsigned int idx = (p.x * colSize) + p.y;
-				//cout << "idx:" << idx;
-				vector<float> fVal = aeEncoder->m_featureVector[idx];
-				/*convert vector to Mat*/
-				Mat fMat;
-				fMat = Mat::zeros(1, fVal.size(), CV_32FC1);
-				memcpy(fMat.data, fVal.data(), fVal.size() * sizeof(float));
-				testVal.push_back(fMat);
-				testLabel.push_back(data.testSamples.labelName[cnt2]);
-				cnt2++;
-			}
-
-			knn.KNNTest(trainVal, trainLabel, testVal, testLabel, k);
-		}
+		bool isAE;
+		isAE = true;
+		CalculateClassification(isAE, data, utils, k, *aeEncoder, knn, perform);
+		string perfFile = "Performance_Metrics_AE.csv";
 	}
 	else if (outChoice == 2) {
 		cout << "Visualising the feature vector...." << endl;
@@ -262,7 +221,8 @@ void Autoencoder::AutoencoderUserMenu(vector<vector<float>>& coherenceVec, Data&
 			mlookUpTable_8UC1.at<uchar>(0, i) = uchar(255 - i);
 		}
 		cv::LUT(meanMat, mlookUpTable_8UC1, outMat);
-		imwrite("PatchColorMap_AE.png", outMat);
+		cv::equalizeHist(outMat, outMat);
+		cv::imwrite("PatchColorMap_AE.png", outMat);
 	}
 	else if (outChoice == 3) {
 		cout << "Writing feature vector to file.." << endl;
@@ -315,64 +275,22 @@ void Autoencoder::AutoencoderUserMenu(vector<vector<float>>& coherenceVec, Data&
 			mlookUpTable_8UC1.at<uchar>(0, i) = uchar(255 - i);
 		}
 		cv::LUT(meanMat, mlookUpTable_8UC1, outMat);
-		imwrite("PatchColorMap_StackedAE.png", outMat);
+		cv::equalizeHist(outMat, outMat);
+		cv::imwrite("PatchColorMap_StackedAE.png", outMat);
 	}
 	else if (outChoice == 7) {
 		cout << "Visualising the classified map..." << endl;
 	}
 	else if (outChoice == 8) {
-		vector<Mat> trainVal, testVal;
-		vector<unsigned char> trainLabel, testLabel;
-		cout << "Enter number of training samples per label class" << endl;
-		cin >> numberOfTrainSamples;
-		//cout << "Enter the number of test samples per label class" << endl;
-		//cin >> numberOfTestSamples;
-
-		cout << "Splitting dataset into training and testing.." << endl;
-		//Splitting training and testing data for classification
-		for (int fold = 0; fold < 5; fold++) {
-			cout << "In " << fold + 1 << "......" << endl;
-			utils.DivideTrainTestData(numberOfTrainSamples, numberOfTestSamples, data, fold);
-
-			cout << "Number of training samples: " << data.trainSamples.Samples.size() << endl;
-			cout << "Number of test samples:" << data.testSamples.Samples.size() << endl;
-			int rSize = 6640;
-			int colSize = 1390;
-
-			/*****resetting vectors and variables***********/
-			int cnt1 = 0, cnt2 = 0;
-			trainVal.clear();
-			trainLabel.clear();
-			testVal.clear();
-			testLabel.clear();
-
-			for (const auto& p : data.trainSamples.Samples) {
-				unsigned int idx = (p.x * colSize) + p.y;
-				//cout << "idx:" << idx;
-				vector<float> fVal = aeEncoder2->m_featureVector[idx];
-				/*convert vector to Mat*/
-				Mat fMat;
-				fMat = Mat::zeros(1, fVal.size(), CV_32FC1);
-				memcpy(fMat.data, fVal.data(), fVal.size() * sizeof(float));
-				trainVal.push_back(fMat);
-				trainLabel.push_back(data.trainSamples.labelName[cnt1]);
-				cnt1++;
-			}
-			for (const auto& p : data.testSamples.Samples) {
-				unsigned int idx = (p.x * colSize) + p.y;
-				//cout << "idx:" << idx;
-				vector<float> fVal = aeEncoder2->m_featureVector[idx];
-				/*convert vector to Mat*/
-				Mat fMat;
-				fMat = Mat::zeros(1, fVal.size(), CV_32FC1);
-				memcpy(fMat.data, fVal.data(), fVal.size() * sizeof(float));
-				testVal.push_back(fMat);
-				testLabel.push_back(data.testSamples.labelName[cnt2]);
-				cnt2++;
-			}
-
-			knn.KNNTest(trainVal, trainLabel, testVal, testLabel, k);
-		}
+		bool isAE;
+		isAE = false;
+		CalculateClassification(isAE, data, utils, k, *aeEncoder2, knn, perform);
+	}
+	else if (outChoice == 9) {
+		string visualizeFile = "InterMediate.csv";
+		string imageName = "ClassifiedAE_full_1.png";
+		cout << "Visualise the classified image" << endl;
+		utils.Visualization(visualizeFile, imageName, data.labelImages[0].size());
 	}
 	else {
 		cerr << "Incorrect input..exiting" << endl;
@@ -380,3 +298,133 @@ void Autoencoder::AutoencoderUserMenu(vector<vector<float>>& coherenceVec, Data&
 	}
 }
 
+void CalculateClassification(bool isAE, Data& data, Utils& utils, int k, 
+							 Autoencoder& aeEncoder, KNN knn, Performance perform) {
+	string perfFile;
+	if (!isAE) {
+		perfFile = "Performance_Metrics_SAE.csv";
+	}
+	else {
+		perfFile = "Performance_Metrics_AE.csv";
+	}
+	
+	Mat img;
+	Mat classifiedImage;
+
+	int rSize = 6640;
+	int colSize = 1390;
+	img = Mat::zeros(rSize, colSize, CV_32FC1);
+	classifiedImage = Mat::zeros(rSize, colSize, CV_32FC1);
+
+	ofstream perfPtr;
+	perfPtr.open(perfFile, ofstream::out | ofstream::app);
+	perfPtr << "PatchIdx" << "," << "OA" << endl;
+	perfPtr.close();
+
+	for (int patchIdx = 136; patchIdx < MAXNUMOFPATCHES; patchIdx++) {
+
+		vector<pair<vector<Point2i>, uint>> patchPoint = utils.GetPatchPoints(patchIdx, data);
+		vector<float> accuracy;
+		string fileName, csvFile, classify;
+		if (!isAE) {
+			fileName = to_string(patchIdx) + "_SAE.png";
+			csvFile = to_string(patchIdx) + "_SAE.csv";
+			classify = to_string(patchIdx) + "_SAE_classify.csv";
+		}
+		else {
+			fileName = to_string(patchIdx) + "_AE.png";
+			csvFile = to_string(patchIdx) + "_AE.csv";
+			classify = to_string(patchIdx) + "_AE_classify.csv";
+		}
+		accuracy.clear();
+		cout << "Splitting dataset into training and testing.." << endl;
+		//Splitting training and testing data for classification
+		for (int fold = 0; fold < 5; fold++) {
+			vector<Mat> trainVal, testVal;
+			vector<unsigned char> trainLabel, testLabel;
+			vector<unsigned char> classResult;
+
+			cout << "In " << fold + 1 << "......" << endl;
+			//utils.DivideTrainTestData(data, fold, patchIdx);
+			utils.DivideTrainTestData(data, fold, patchPoint);
+
+			cout << "Number of training samples: " << data.trainSamples.Samples.size() << endl;
+			cout << "Number of test samples:" << data.testSamples.Samples.size() << endl;
+
+			/*****resetting vectors and variables***********/
+			int cnt1 = 0, cnt2 = 0;
+			for (const auto& p : data.trainSamples.Samples) {
+				unsigned int idx = (p.x * colSize) + p.y;
+				//cout << "idx:" << idx;
+				vector<float> fVal = aeEncoder.m_featureVector[idx];
+				/*convert vector to Mat*/
+				Mat fMat;
+				fMat = Mat::zeros(1, fVal.size(), CV_32FC1);
+				memcpy(fMat.data, fVal.data(), fVal.size() * sizeof(float));
+				trainVal.push_back(fMat);
+				trainLabel.push_back(data.trainSamples.labelName[cnt1]);
+				cnt1++;
+				fMat.release();
+			}
+			for (const auto& p : data.testSamples.Samples) {
+				unsigned int idx = (p.x * colSize) + p.y;
+				//cout << "idx:" << idx;
+				vector<float> fVal = aeEncoder.m_featureVector[idx];
+				/*convert vector to Mat*/
+				Mat fMat;
+				fMat = Mat::zeros(1, fVal.size(), CV_32FC1);
+				memcpy(fMat.data, fVal.data(), fVal.size() * sizeof(float));
+				testVal.push_back(fMat);
+				testLabel.push_back(data.testSamples.labelName[cnt2]);
+				cnt2++;
+				fMat.release();
+			}
+			cout << " starting classification.." << endl;
+			knn.KNNTest(trainVal, trainLabel, testVal, testLabel, classResult, k);
+
+			float intAccuracy = perform.calculatePredictionAccuracy(classResult, testLabel);
+			accuracy.push_back(intAccuracy);
+			cout << "Overall Accuracy for fold " << fold + 1 << " : " << intAccuracy << endl;
+
+			for (int cnt = 0; cnt < data.testSamples.Samples.size(); cnt++) {
+				Point2i newPoint(data.testSamples.Samples[cnt]);
+				classifiedImage.at<int>(newPoint.x, newPoint.y) = (int)classResult[cnt];
+			}
+
+			for (int cnt = 0; cnt < trainVal.size(); cnt++) {
+				trainVal[cnt].release();
+			}
+			for (int cnt = 0; cnt < testVal.size(); cnt++) {
+				testVal[cnt].release();
+			}
+			trainLabel.clear();
+			testLabel.clear();
+			classResult.clear();
+		}
+		float avgAccuracy = 0.;
+		float sumOfElements = 0.;
+		for (auto& a : accuracy) {
+			sumOfElements += a;
+		}
+		avgAccuracy = sumOfElements / 5;
+		cout << "Sum :" << sumOfElements << endl;
+		cout << "Average accuracy of patch " << patchIdx + 1 << ":" << avgAccuracy << endl;
+
+		perfPtr.open(perfFile, ofstream::out | ofstream::app);
+		perfPtr << patchIdx + 1 << "," << avgAccuracy << endl;
+		perfPtr.close();
+
+		ofstream fileptr;
+		fileptr.open(csvFile, ofstream::out);
+		for (int row = 0; row < classifiedImage.rows; row++) {
+			for (int col = 0; col < classifiedImage.cols; col++) {
+				fileptr << classifiedImage.at<int>(row, col) << ",";
+			}
+			fileptr << endl;
+		}
+
+		//if (patchIdx % 5 == 0) {
+		utils.visualiseLabels(classifiedImage, fileName);
+		//}
+	}
+}

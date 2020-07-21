@@ -15,6 +15,7 @@ using namespace std;
 using namespace cv;
 
 #define NUMOFCLASSES  5
+#define MAXNUMOFPATCHES 139
 
 class Data {
 public:

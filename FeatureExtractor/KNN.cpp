@@ -140,11 +140,10 @@ Date : 12.06.2020
 Description: Classify test points using KNN Classifier
 *************************************************************************/
 
-void KNN::KNNTest(vector<Mat>& trainVal, vector<unsigned char>& trainLabels, 
+void KNN::KNNTest(vector<Mat>& trainVal, vector<unsigned char>& trainLabels,
 				  vector<Mat>& testVal, vector<unsigned char>& testLabels, 
-				  int k) {
+				  vector<unsigned char>& classResult, int k) {
 	/*for each sample in the testing data, caculate distance from each training sample */
-	vector<unsigned char> classResult;
 	Feature f;
 	for (int i = 0; i < testVal.size(); i++) {								//for each test sample
 		vector<pair<float, unsigned char>> distVec;
@@ -160,13 +159,11 @@ void KNN::KNNTest(vector<Mat>& trainVal, vector<unsigned char>& trainLabels,
 		unsigned char classVal = this->Classify(distVec, k);
 		//cout << "Feature point classified as " << classVal << endl;
 		classResult.push_back(classVal);
+
+		if ((i + 1) % 1000 == 0) {
+			cout << "1000 samples classified" << endl;
+		}
 	}	
-	float accuracy = perform.calculatePredictionAccuracy(classResult, testLabels);
-	cout << "Accuracy: " << accuracy << endl;
-	//log the calculated accuracy
-	//cout << "feature name:" << featureName << endl;
-	//Utils utils;
-	//utils.WriteToFile(k, accuracy, trainVal.size(), testVal.size(), featureName);
 }
 
 
