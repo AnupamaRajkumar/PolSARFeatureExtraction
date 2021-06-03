@@ -1,17 +1,15 @@
 # ProcessChainForPolSARFeature
-Different PolSAR feature extraction and Process Chain
+Hancrafted and shallow deep neural network for PolSAR feature extraction.\
+Handcrafted features:\
+1. SAR polarimetric features - Pauli decomposition, Krogager decomposition, Freeman-Durden decomposition, Cloude and Pottier decomposition
+2. Texture based features - GLCM and LBP
+3. Color based features - MPEG-7
+4. Morphological features - opening and closing
+5. Shallow deep neural network - Autoencoder
 
-KNNTest in KNN.h 
-Function : classifies the test samples based on training data
-Arguments: Trained samples, labels and testing samples and labels
+# Results - Oberpfaffenhofen dataset
 
-DivideTrainTestData in main.cpp
-Function: Splits the training and test data sets
-Arguments: Data samples
 
-calculatePredictionAccuracy in Performance.cpp
-Function: Calculates accuracy percentage
-Arguments: Predicted and true labels
 
-Feature.cpp
-Contains feature extractors
+
+
